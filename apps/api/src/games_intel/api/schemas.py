@@ -39,6 +39,27 @@ class PaginationMeta(BaseModel):
     order: SortOrderName
 
 
+CollectionStatusName = Literal["idle", "loading", "empty", "error", "ready"]
+
+
+class CollectionStateRead(BaseModel):
+    model_config = _STRICT
+
+    status: CollectionStatusName
+    error_type: str | None = None
+    error_message: str | None = None
+
+
+class GameHydrationRead(BaseModel):
+    model_config = _STRICT
+
+    catalog: CollectionStateRead
+    critic: CollectionStateRead
+    user: CollectionStateRead
+    letsplay: CollectionStateRead
+    similar: CollectionStateRead
+
+
 class GameListItemRead(BaseModel):
     model_config = _STRICT
 
@@ -50,6 +71,7 @@ class GameListItemRead(BaseModel):
     userscore: float | None = None
     platforms: list[str] = Field(default_factory=list)
     updated_at: datetime
+    catalog_collection: CollectionStateRead
 
 
 class GameListResponse(BaseModel):
@@ -87,6 +109,7 @@ class GameCardRead(BaseModel):
     user: ReviewSummary | None = None
     letsplay: LetsPlayRead | None = None
     similar: list[SimilarGameRef] = Field(default_factory=list)
+    hydration: GameHydrationRead
 
 
 class PlatformListResponse(BaseModel):

@@ -13,7 +13,7 @@ from games_intel.contracts.adapters import (
 
 
 class YouTubePort(Protocol):
-    """In-process YouTube Data API + captions. Does not run STT."""
+    """In-process yt-dlp InnerTube search, captions, and audio. Does not run STT."""
 
     async def search_letsplays(self, inp: SearchLetsPlaysInput) -> LetsPlaySearch: ...
 

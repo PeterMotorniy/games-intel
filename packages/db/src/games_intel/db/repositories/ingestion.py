@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from datetime import date, datetime
 from typing import Any, cast
 from uuid import UUID, uuid4
@@ -246,6 +247,30 @@ class IngestionRepository:
         )
         item_id = (await self._session.execute(stmt)).scalar_one()
         return InsertResult(outcome=InsertOutcome.inserted, id=item_id)
+
+    async def latest_items_for_slugs(
+        self, slugs: Sequence[str]
+    ) -> dict[tuple[str, IngestionStage], IngestionItemRecord]:
+        if not slugs:
+            return {}
+        stmt = (
+            select(IngestionItem)
+            .where(IngestionItem.metacritic_slug.in_(list(slugs)))
+            .distinct(IngestionItem.metacritic_slug, IngestionItem.stage)
+            .order_by(
+                IngestionItem.metacritic_slug,
+                IngestionItem.stage,
+                IngestionItem.updated_at.desc(),
+                IngestionItem.id.desc(),
+            )
+        )
+        rows = (await self._session.scalars(stmt)).all()
+        return {(row.metacritic_slug, IngestionStage(row.stage)): item_record(row) for row in rows}
+
+    async def latest_items_for_slug(
+        self, metacritic_slug: str
+    ) -> dict[tuple[str, IngestionStage], IngestionItemRecord]:
+        return await self.latest_items_for_slugs((metacritic_slug,))
 
     async def get_item(
         self, run_id: UUID, metacritic_slug: str, stage: IngestionStage

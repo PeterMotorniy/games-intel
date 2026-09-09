@@ -184,7 +184,11 @@ class LetsPlayHandler:
             )
         except YoutubeAdapterError as exc:
             raise map_adapter_error(exc.to_dto()) from exc
-        if transcript.status == "ok" and transcript.text.strip():
+        if (
+            transcript.status == "ok"
+            and transcript.text.strip()
+            and _is_english_language(transcript.language)
+        ):
             return transcript.text
         if not self.settings.letsplay.stt_enabled:
             emit_json(
@@ -307,3 +311,10 @@ def clip_transcript(text: str, max_chars: int) -> str:
     if len(text) <= max_chars:
         return text
     return text[:max_chars]
+
+
+def _is_english_language(value: str | None) -> bool:
+    if value is None or not value.strip():
+        return True
+    lowered = value.casefold().replace("_", "-")
+    return lowered in {"en", "eng", "english"} or lowered.startswith("en-")

@@ -1,4 +1,5 @@
 import type { components } from "../src/api/schema";
+import { READY_COLLECTION, READY_HYDRATION } from "../src/lib/collection";
 
 export type GameListItem = components["schemas"]["GameListItemRead"];
 export type GameCard = components["schemas"]["GameCardRead"];
@@ -41,6 +42,7 @@ const ELDEN: GameCard = {
     { metacritic_slug: "sekiro", title: "Sekiro: Shadows Die Twice", score: 0.87, rank: 1 },
     { metacritic_slug: "silksong", title: "Hollow Knight: Silksong", score: 0.61, rank: 2 },
   ],
+  hydration: READY_HYDRATION,
 };
 
 const SEKIRO: GameCard = {
@@ -76,6 +78,7 @@ const SEKIRO: GameCard = {
     highlights: ["deflection"],
   },
   similar: [{ metacritic_slug: "elden-ring", title: "Elden Ring", score: 0.87, rank: 1 }],
+  hydration: READY_HYDRATION,
 };
 
 const SILKSONG: GameCard = {
@@ -111,6 +114,7 @@ const SILKSONG: GameCard = {
     highlights: null,
   },
   similar: [{ metacritic_slug: "elden-ring", title: "Elden Ring", score: 0.61, rank: 1 }],
+  hydration: { ...READY_HYDRATION, letsplay: { status: "empty", error_type: null, error_message: null } },
 };
 
 const EXPEDITION: GameCard = {
@@ -147,6 +151,7 @@ const EXPEDITION: GameCard = {
     highlights: null,
   },
   similar: [{ metacritic_slug: "elden-ring", title: "Elden Ring", score: 0.44, rank: 1 }],
+  hydration: { ...READY_HYDRATION, letsplay: { status: "error", error_type: null, error_message: null } },
 };
 
 const ANIMAL: GameCard = {
@@ -174,6 +179,13 @@ const ANIMAL: GameCard = {
     highlights: null,
   },
   similar: [],
+  hydration: {
+    catalog: READY_COLLECTION,
+    critic: { status: "idle", error_type: null, error_message: null },
+    user: { status: "idle", error_type: null, error_message: null },
+    letsplay: { status: "empty", error_type: null, error_message: null },
+    similar: { status: "empty", error_type: null, error_message: null },
+  },
 };
 
 export const STUB_GAMES: Record<string, GameCard> = {
@@ -205,6 +217,7 @@ export function toListItem(card: GameCard): GameListItem {
     userscore: users.length > 0 ? Math.max(...users) : null,
     platforms: platforms.map((row) => row.platform_code),
     updated_at: UPDATED[card.metacritic_slug] ?? "2026-09-08T00:00:00Z",
+    catalog_collection: card.hydration.catalog,
   };
 }
 

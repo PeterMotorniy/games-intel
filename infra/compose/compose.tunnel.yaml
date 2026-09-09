@@ -1,0 +1,20 @@
+# Public HTTPS overlay. Uses localhost.run (SSH), not Cloudflare Quick Tunnel.
+# happ-xray and similar VPNs pass SSH; they reset cloudflared's edge TLS.
+#
+# From repo root (VPN may stay on):
+#   docker compose --env-file .env -f infra/compose/compose.yaml -f infra/compose/compose.tunnel.yaml up -d --build tunnel
+#   docker compose --env-file .env -f infra/compose/compose.yaml -f infra/compose/compose.tunnel.yaml logs -f tunnel
+
+services:
+  tunnel:
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.tunnel
+    init: true
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "-c"]
+    command:
+      - ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -R 80:web:80 nokey@localhost.run
+    depends_on:
+      web:
+        condition: service_healthy

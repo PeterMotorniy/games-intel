@@ -87,7 +87,9 @@ class CatalogQueryService:
                 page=page,
                 page_size=page_size,
             )
-            return game_list_response(page_data)
+            slugs = [item.metacritic_slug for item in page_data.items]
+            stage_items = await IngestionRepository(session).latest_items_for_slugs(slugs)
+            return game_list_response(page_data, stage_items)
 
         return await self._with_session(_load)
 
@@ -98,7 +100,8 @@ class CatalogQueryService:
             if game is None:
                 raise ProblemError(404, "Not Found", f"game not found: {slug}")
             similar = await SimilarGamesRepository(session).list_for_slug(slug)
-            return game_card(game, similar)
+            stage_items = await IngestionRepository(session).latest_items_for_slug(slug)
+            return game_card(game, similar, stage_items)
 
         return await self._with_session(_load)
 

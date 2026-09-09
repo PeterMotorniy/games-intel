@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import type { MonitorItemRead, MonitorRunRead } from "../api/types";
-import { buildRunGraph, rollupStatus, sortRunsNewestFirst } from "./pipeline-dag";
+import { buildRunGraph, rollupStatus, runGraphTitle, sortRunsNewestFirst } from "./pipeline-dag";
 
 const RUN: MonitorRunRead = {
   id: "0191c0aa-7e3b-7000-8000-000000000001",
@@ -103,7 +103,52 @@ describe("buildRunGraph", () => {
     expect(graph.catalogTask.errors).toHaveLength(1);
   });
 
-  it("labels a completed run with no new games instead of waiting", () => {
+  it("does not keep catalog running after a page-level fail left games only discovered", () => {
+    const graph = buildRunGraph(
+      { ...RUN, status: "completed", discovered_count: 2, completed_at: "2026-09-08T12:05:00Z" },
+      [
+        item({
+          metacritic_slug: "elden-ring",
+          title: "Elden Ring",
+          stage: "discovered",
+          status: "completed",
+        }),
+        item({
+          metacritic_slug: "sekiro",
+          title: "Sekiro",
+          stage: "discovered",
+          status: "completed",
+        }),
+        item({
+          metacritic_slug: RUN.id,
+          stage: "cataloged",
+          status: "failed",
+          error_type: "TransientError",
+          error_message: "sidecar request timed out",
+        }),
+      ],
+    );
+    expect(graph.catalogTask.status).toBe("failed");
+    expect(graph.catalogTask.endedAt).not.toBeNull();
+    expect(graph.games.map((row) => row.slug).sort()).toEqual(["elden-ring", "sekiro"]);
+    expect(graph.catalogTask.errors.some((error) => error.errorType === "TransientError")).toBe(true);
+  });
+
+  it("surfaces errors stored on running items", () => {
+    const graph = buildRunGraph(RUN, [
+      item({
+        metacritic_slug: "elden-ring",
+        stage: "reviews",
+        status: "running",
+        error_type: "TransientError",
+        error_message: "sidecar request timed out",
+      }),
+    ]);
+    const reviews = graph.games[0]?.tasks.find((task) => task.kind === "reviews");
+    expect(reviews?.errors[0]?.errorMessage).toBe("sidecar request timed out");
+  });
+
+  it("keeps review and lets play tasks when a completed run found no new games", () => {
     const graph = buildRunGraph(
       { ...RUN, status: "completed", discovered_count: 0, completed_at: "2026-09-08T12:00:03Z" },
       [],
@@ -111,7 +156,25 @@ describe("buildRunGraph", () => {
     expect(graph.catalogTask.status).toBe("completed");
     expect(graph.catalogTask.label).toContain("no new games");
     expect(graph.catalogTask.endedAt).toBe("2026-09-08T12:00:03Z");
-    expect(graph.games).toHaveLength(0);
+    expect(graph.games).toHaveLength(1);
+    expect(graph.games[0]?.slug).toBe("");
+    expect(graph.games[0]?.tasks.map((task) => [task.kind, task.status])).toEqual([
+      ["reviews", "completed"],
+      ["letsplay", "completed"],
+      ["similar", "completed"],
+    ]);
+  });
+});
+
+describe("runGraphTitle", () => {
+  it("labels new_releases as page 0", () => {
+    expect(runGraphTitle(RUN)).toBe("Manual run page 0");
+  });
+
+  it("labels browse runs with the listing page", () => {
+    expect(runGraphTitle({ ...RUN, source: "browse", page: 1, trigger: "cron" })).toBe(
+      "Scheduled run page 1",
+    );
   });
 });
 

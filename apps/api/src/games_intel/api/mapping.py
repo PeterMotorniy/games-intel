@@ -6,7 +6,9 @@ from decimal import Decimal
 
 from games_intel.api.schemas import (
     CircuitStateName,
+    CollectionStateRead,
     GameCardRead,
+    GameHydrationRead,
     GameListItemRead,
     GameListResponse,
     IngestionItemStatusName,
@@ -32,11 +34,12 @@ from games_intel.db.records import (
     GameListItem,
     GameListPage,
     GameRecord,
+    IngestionItemRecord,
     MonitorAggregates,
     MonitorItemRecord,
     SimilarGameRecord,
 )
-from games_intel.db.types import GameSort, SortOrder
+from games_intel.db.types import GameSort, IngestionItemStatus, IngestionStage, SortOrder
 from games_intel.kafka.logging import sanitize_error_message
 
 
@@ -46,7 +49,121 @@ def _userscore(value: Decimal | None) -> float | None:
     return float(value)
 
 
-def game_list_item(item: GameListItem) -> GameListItemRead:
+def _item_for(
+    items: dict[tuple[str, IngestionStage], IngestionItemRecord],
+    slug: str,
+    stage: IngestionStage,
+) -> IngestionItemRecord | None:
+    return items.get((slug, stage))
+
+
+def collection_state(
+    *,
+    has_content: bool,
+    item: IngestionItemRecord | None,
+    domain_empty: bool = False,
+    domain_error: bool = False,
+) -> CollectionStateRead:
+    if has_content:
+        return CollectionStateRead(status="ready")
+    if domain_error:
+        return CollectionStateRead(
+            status="error",
+            error_type=None if item is None else item.error_type,
+            error_message=_public_error_message(None if item is None else item.error_message),
+        )
+    if domain_empty:
+        return CollectionStateRead(status="empty")
+    if item is None or item.status is IngestionItemStatus.pending:
+        return CollectionStateRead(status="idle")
+    if item.status is IngestionItemStatus.running:
+        return CollectionStateRead(status="loading")
+    if item.status is IngestionItemStatus.failed:
+        return CollectionStateRead(
+            status="error",
+            error_type=item.error_type,
+            error_message=_public_error_message(item.error_message),
+        )
+    return CollectionStateRead(status="empty")
+
+
+def _catalog_has_content(game: GameRecord | GameListItem) -> bool:
+    if isinstance(game, GameListItem):
+        return bool(
+            game.cover_url
+            or (game.developer and game.developer.strip())
+            or game.max_metascore is not None
+            or game.max_userscore is not None
+            or game.platforms
+        )
+    return bool(
+        game.cover_url
+        or (game.developer and game.developer.strip())
+        or (game.publisher and game.publisher.strip())
+        or game.description
+        or game.video_url
+        or game.genres
+        or game.release_date
+        or game.platforms
+    )
+
+
+def _review_has_copy(summary: ReviewSummary | None) -> bool:
+    if summary is None:
+        return False
+    return bool(summary.summary.strip() or summary.likes or summary.dislikes)
+
+
+def _letsplay_has_content(game: GameRecord) -> bool:
+    if game.letsplay_conclusion and game.letsplay_conclusion.strip():
+        return True
+    return (
+        game.letsplay_status is not None
+        and game.letsplay_status.value == "ok"
+        and bool(game.letsplay_video_url)
+    )
+
+
+def game_hydration(
+    game: GameRecord,
+    similar: tuple[SimilarGameRecord, ...],
+    items: dict[tuple[str, IngestionStage], IngestionItemRecord],
+) -> GameHydrationRead:
+    slug = game.metacritic_slug
+    critic = _review(game.critic_likes, game.critic_dislikes, game.critic_summary)
+    user = _review(game.user_likes, game.user_dislikes, game.user_summary)
+    letsplay_status = None if game.letsplay_status is None else game.letsplay_status.value
+    return GameHydrationRead(
+        catalog=collection_state(
+            has_content=_catalog_has_content(game),
+            item=_item_for(items, slug, IngestionStage.cataloged),
+        ),
+        critic=collection_state(
+            has_content=_review_has_copy(critic),
+            item=_item_for(items, slug, IngestionStage.reviews),
+        ),
+        user=collection_state(
+            has_content=_review_has_copy(user),
+            item=_item_for(items, slug, IngestionStage.reviews),
+        ),
+        letsplay=collection_state(
+            has_content=_letsplay_has_content(game),
+            item=_item_for(items, slug, IngestionStage.letsplay),
+            domain_empty=letsplay_status in {"no_video", "transcript_unavailable"},
+            domain_error=letsplay_status == "quota_exceeded",
+        ),
+        similar=collection_state(
+            has_content=any(row.metacritic_slug != slug for row in similar),
+            item=_item_for(items, slug, IngestionStage.similar),
+        ),
+    )
+
+
+def game_list_item(
+    item: GameListItem,
+    items: dict[tuple[str, IngestionStage], IngestionItemRecord] | None = None,
+) -> GameListItemRead:
+    stage_items = items or {}
     return GameListItemRead(
         metacritic_slug=item.metacritic_slug,
         title=item.title,
@@ -56,12 +173,20 @@ def game_list_item(item: GameListItem) -> GameListItemRead:
         userscore=_userscore(item.max_userscore),
         platforms=list(item.platforms),
         updated_at=item.updated_at,
+        catalog_collection=collection_state(
+            has_content=_catalog_has_content(item),
+            item=_item_for(stage_items, item.metacritic_slug, IngestionStage.cataloged),
+        ),
     )
 
 
-def game_list_response(page: GameListPage) -> GameListResponse:
+def game_list_response(
+    page: GameListPage,
+    items: dict[tuple[str, IngestionStage], IngestionItemRecord] | None = None,
+) -> GameListResponse:
+    stage_items = items or {}
     return GameListResponse(
-        items=[game_list_item(item) for item in page.items],
+        items=[game_list_item(item, stage_items) for item in page.items],
         meta=PaginationMeta(
             page=page.page,
             page_size=page.page_size,
@@ -136,7 +261,12 @@ def similar_items(
     ]
 
 
-def game_card(game: GameRecord, similar: tuple[SimilarGameRecord, ...]) -> GameCardRead:
+def game_card(
+    game: GameRecord,
+    similar: tuple[SimilarGameRecord, ...],
+    items: dict[tuple[str, IngestionStage], IngestionItemRecord] | None = None,
+) -> GameCardRead:
+    stage_items = items or {}
     return GameCardRead(
         metacritic_slug=game.metacritic_slug,
         title=game.title,
@@ -159,6 +289,7 @@ def game_card(game: GameRecord, similar: tuple[SimilarGameRecord, ...]) -> GameC
         user=_review(game.user_likes, game.user_dislikes, game.user_summary),
         letsplay=_letsplay(game),
         similar=similar_items(game.metacritic_slug, similar),
+        hydration=game_hydration(game, similar, stage_items),
     )
 
 

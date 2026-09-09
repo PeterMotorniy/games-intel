@@ -292,22 +292,25 @@ class DaemonLoop:
             async with session.begin():
                 ingestion = IngestionRepository(session)
                 process_date = await _resolve_process_date(event, ingestion)
-                if run_id is None or stage is None or process_date is None:
+                slugs = _item_slugs(event)
+                if run_id is None or stage is None or process_date is None or not slugs:
                     return self._bump_memory_attempts(event.id)
-                await ingestion.upsert_item(
-                    run_id=run_id,
-                    metacritic_slug=event.subject,
-                    process_date=process_date,
-                    stage=stage,
-                    status=IngestionItemStatus.running,
-                    event_id=event.id,
-                    error_type=type(exc).__name__,
-                    error_message=sanitize_error_message(str(exc)),
-                )
-                item = await ingestion.get_item(run_id, event.subject, stage)
-                if item is None:
-                    return self._bump_memory_attempts(event.id)
-                return await ingestion.increment_attempt(item.id)
+                attempts = 0
+                for slug in slugs:
+                    await ingestion.upsert_item(
+                        run_id=run_id,
+                        metacritic_slug=slug,
+                        process_date=process_date,
+                        stage=stage,
+                        status=IngestionItemStatus.running,
+                        event_id=event.id,
+                        error_type=type(exc).__name__,
+                        error_message=sanitize_error_message(str(exc)),
+                    )
+                    item = await ingestion.get_item(run_id, slug, stage)
+                    if item is not None:
+                        attempts = await ingestion.increment_attempt(item.id)
+                return attempts if attempts else self._bump_memory_attempts(event.id)
 
     def _bump_memory_attempts(self, event_id: str) -> int:
         attempts = self._transient_attempts.get(event_id, 0) + 1
@@ -337,16 +340,18 @@ class DaemonLoop:
                     instance_id=self.config.instance_id,
                 )
                 if run_id is not None and stage is not None and process_date is not None:
-                    await ingestion.upsert_item(
-                        run_id=run_id,
-                        metacritic_slug=event.subject,
-                        process_date=process_date,
-                        stage=stage,
-                        status=status,
-                        event_id=event.id,
-                        error_type=type(exc).__name__,
-                        error_message=sanitize_error_message(str(exc)),
-                    )
+                    slugs = _item_slugs(event)
+                    for slug in slugs:
+                        await ingestion.upsert_item(
+                            run_id=run_id,
+                            metacritic_slug=slug,
+                            process_date=process_date,
+                            stage=stage,
+                            status=status,
+                            event_id=event.id,
+                            error_type=type(exc).__name__,
+                            error_message=sanitize_error_message(str(exc)),
+                        )
                 await _call_terminal_failure(self.handler, event, session, exc)
         self._log(event, error_type=type(exc).__name__, attempt=None, event_name="terminal")
         if dlq_reason is not None:
@@ -501,6 +506,28 @@ def _stage_or_none(stage_name: str) -> IngestionStage | None:
         return IngestionStage(stage_name)
     except ValueError:
         return None
+
+
+def _item_slugs(event: CloudEvent[Any]) -> tuple[str, ...]:
+    """Game slugs affected by this event. Page listings must not use run_id as slug."""
+    data = event.data
+    games = getattr(data, "games", None)
+    if isinstance(games, list | tuple):
+        slugs = tuple(
+            slug
+            for game in games
+            if isinstance((slug := getattr(game, "metacritic_slug", None)), str) and slug
+        )
+        if slugs:
+            return slugs
+    slug = getattr(data, "metacritic_slug", None)
+    if isinstance(slug, str) and slug:
+        return (slug,)
+    subject = event.subject
+    run_id = _event_run_id(event)
+    if isinstance(subject, str) and subject and (run_id is None or subject != str(run_id)):
+        return (subject,)
+    return ()
 
 
 def _event_run_id(event: CloudEvent[Any]) -> UUID | None:

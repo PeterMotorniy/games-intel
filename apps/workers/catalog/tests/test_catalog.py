@@ -157,6 +157,7 @@ async def _seed(
     run_id: UUID = RUN_ID,
     slug: str = SLUG,
     title: str = "Elden Ring",
+    extra: list[tuple[str, str]] | None = None,
     critic_summary: str | None = None,
 ) -> None:
     ingestion = IngestionRepository(session)
@@ -170,20 +171,22 @@ async def _seed(
         run_id=run_id,
         status=IngestionRunStatus.completed,
     )
-    game_id, _ = await catalog.ensure_game_stub(
-        metacritic_slug=slug,
-        title=title,
-        listing_url=f"https://www.metacritic.com/game/{slug}/",
-    )
-    await ingestion.upsert_item(
-        run_id=run_id,
-        metacritic_slug=slug,
-        process_date=PROCESS_DATE,
-        stage=IngestionStage.discovered,
-        status=IngestionItemStatus.completed,
-        game_id=game_id,
-        event_id="discovered-seed",
-    )
+    games = [(slug, title), *(extra or ())]
+    for index, (game_slug, game_title) in enumerate(games):
+        game_id, _ = await catalog.ensure_game_stub(
+            metacritic_slug=game_slug,
+            title=game_title,
+            listing_url=f"https://www.metacritic.com/game/{game_slug}/",
+        )
+        await ingestion.upsert_item(
+            run_id=run_id,
+            metacritic_slug=game_slug,
+            process_date=PROCESS_DATE,
+            stage=IngestionStage.discovered,
+            status=IngestionItemStatus.completed,
+            game_id=game_id,
+            event_id=f"discovered-seed-{index}",
+        )
     if critic_summary is not None:
         await GameReviewsRepository(session).update_reviews(
             ReviewsSlice(
@@ -391,7 +394,7 @@ async def test_404_fails_item_without_retry_or_dlq(
     )
 
 
-async def test_timeout_retries_then_succeeds(
+async def test_timeout_fails_card_without_page_retry(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
@@ -402,17 +405,47 @@ async def test_timeout_retries_then_succeeds(
     loop, _, consumer = _loop(session_factory, handler, settings)
     record = _record(_page(event_id="cat-timeout", settings=settings), settings)
     await loop.process_record(record)
-    assert port.attempts == 3
+    assert port.attempts == 1
     _see_committed(session)
     item = await IngestionRepository(session).get_item(RUN_ID, SLUG, IngestionStage.cataloged)
     assert item is not None
-    assert item.status is IngestionItemStatus.completed
+    assert item.status is IngestionItemStatus.failed
+    assert item.error_type == "TransientError"
     assert consumer.committed[(record.topic, 0)] == 1
-    rows = await OutboxRepository(session).claim("catalog", limit=10)
-    assert len(rows) == 1
+    assert await OutboxRepository(session).claim("catalog", limit=10) == ()
 
 
-async def test_kill_during_catalog_get_retries_with_cache_hit(
+async def test_timeout_fail_fast_marks_remaining_cards_failed(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    tmp_path: Path,
+) -> None:
+    extra = ("sekiro", "Sekiro")
+    await _seed(session, extra=[extra])
+    port = _FlakyPort(_details(), fail_times=10)
+    handler, settings, _covers = _handler(tmp_path, port)
+    loop, _, consumer = _loop(session_factory, handler, settings)
+    record = _record(
+        _page(event_id="cat-timeout-batch", extra=[extra], settings=settings),
+        settings,
+    )
+    await loop.process_record(record)
+    assert port.attempts == 1
+    _see_committed(session)
+    ingestion = IngestionRepository(session)
+    first = await ingestion.get_item(RUN_ID, SLUG, IngestionStage.cataloged)
+    second = await ingestion.get_item(RUN_ID, "sekiro", IngestionStage.cataloged)
+    bogus = await ingestion.get_item(RUN_ID, str(RUN_ID), IngestionStage.cataloged)
+    assert first is not None and first.status is IngestionItemStatus.failed
+    assert second is not None and second.status is IngestionItemStatus.failed
+    assert first.error_type == "TransientError"
+    assert second.error_type == "TransientError"
+    assert bogus is None
+    assert consumer.committed[(record.topic, 0)] == 1
+    assert await OutboxRepository(session).claim("catalog", limit=10) == ()
+
+
+async def test_kill_during_catalog_get_fails_card(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
@@ -424,13 +457,16 @@ async def test_kill_during_catalog_get_retries_with_cache_hit(
     record = _record(_page(event_id="cat-cache-kill", settings=settings), settings)
     await loop.process_record(record)
     assert port.fetches == 1
-    assert port.cache_hits == 1
+    assert port.cache_hits == 0
     _see_committed(session)
     item = await IngestionRepository(session).get_item(RUN_ID, SLUG, IngestionStage.cataloged)
     assert item is not None
-    assert item.status is IngestionItemStatus.completed
+    assert item.status is IngestionItemStatus.failed
+    assert item.error_type == "TransientError"
     assert consumer.committed[(record.topic, 0)] == 1
-    assert await GameCatalogRepository(session).get_by_slug(SLUG) is not None
+    game = await GameCatalogRepository(session).get_by_slug(SLUG)
+    assert game is not None
+    assert game.publisher is None
 
 
 async def test_missing_optional_fields_complete_with_nulls(

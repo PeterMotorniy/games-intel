@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { GameListItem } from "../api/types";
 import { GameCard } from "./GameCard";
 import { renderWithApp } from "../test/render";
+import { READY_COLLECTION } from "../lib/collection";
 
 const GAME: GameListItem = {
   metacritic_slug: "elden-ring",
@@ -14,6 +15,7 @@ const GAME: GameListItem = {
   userscore: 7.8,
   platforms: ["ps5", "pc"],
   updated_at: "2026-09-08T10:00:00Z",
+  catalog_collection: READY_COLLECTION,
 };
 
 describe("GameCard", () => {

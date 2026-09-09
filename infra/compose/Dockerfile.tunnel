@@ -1,0 +1,8 @@
+FROM alpine:3.20
+
+RUN apk add --no-cache openssh-client
+
+# localhost.run is ordinary SSH/TLS, so happ-xray and similar VPNs pass it.
+# Cloudflare Quick Tunnel uses a custom edge protocol and is reset by that DPI.
+ENTRYPOINT ["/bin/sh", "-c"]
+CMD ["ssh -o StrictHostKeyChecking=accept-new -o ServerAliveInterval=30 -o ServerAliveCountMax=3 -R 80:web:80 nokey@localhost.run"]

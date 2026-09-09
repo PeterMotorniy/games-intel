@@ -34,7 +34,7 @@ CloseFn = Callable[[], Awaitable[None]]
 
 
 class LetsPlayAnalyst:
-    """LangGraph LetsPlayAnalystAgent: structured conclusion/highlights in Russian."""
+    """LangGraph LetsPlayAnalystAgent: structured conclusion/highlights in English."""
 
     def __init__(
         self,

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { ListPage } from "./list";
 import { jsonResponse, renderWithApp } from "../test/render";
 import type { GameListResponse, PlatformListResponse } from "../api/types";
+import { READY_COLLECTION } from "../lib/collection";
 
 const EMPTY: GameListResponse = {
   items: [],
@@ -22,6 +23,7 @@ const LIST: GameListResponse = {
       userscore: 7.8,
       platforms: ["ps5"],
       updated_at: "2026-09-08T10:00:00Z",
+      catalog_collection: READY_COLLECTION,
     },
     {
       metacritic_slug: "sekiro",
@@ -32,6 +34,7 @@ const LIST: GameListResponse = {
       userscore: 8.4,
       platforms: ["pc"],
       updated_at: "2026-09-08T09:00:00Z",
+      catalog_collection: READY_COLLECTION,
     },
   ],
   meta: { page: 1, page_size: 20, total: 2, sort: "metascore", order: "desc" },

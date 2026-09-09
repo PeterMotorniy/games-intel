@@ -1,6 +1,6 @@
 from games_intel.adapters.youtube.audio import FakeAudioDownloader, YtDlpAudioDownloader
 from games_intel.adapters.youtube.captions import CaptionsText, FakeCaptionsFetcher
-from games_intel.adapters.youtube.client import HttpYouTubeAdapter
+from games_intel.adapters.youtube.client import HttpYouTubeAdapter, YouTubeAdapter
 from games_intel.adapters.youtube.exceptions import YoutubeAdapterError
 from games_intel.adapters.youtube.factory import create_youtube_port
 from games_intel.adapters.youtube.fake import FakeYouTubeAdapter
@@ -13,6 +13,7 @@ __all__ = [
     "FakeCaptionsFetcher",
     "FakeYouTubeAdapter",
     "HttpYouTubeAdapter",
+    "YouTubeAdapter",
     "YouTubePort",
     "YoutubeAdapterError",
     "YtDlpAudioDownloader",

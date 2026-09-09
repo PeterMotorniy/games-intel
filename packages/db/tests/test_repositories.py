@@ -429,6 +429,53 @@ async def test_item_lock_and_attempt_count(session: AsyncSession) -> None:
     assert count == 1
 
 
+async def test_latest_items_for_slugs_picks_newest_per_stage(session: AsyncSession) -> None:
+    ingestion = IngestionRepository(session)
+    older = await ingestion.create_run(
+        process_date=date(2026, 9, 7),
+        source="new_releases",
+        page=None,
+        limit=20,
+        trigger=RunTrigger.cron,
+    )
+    newer = await ingestion.create_run(
+        process_date=date(2026, 9, 7),
+        source="browse",
+        page=1,
+        limit=20,
+        trigger=RunTrigger.manual,
+    )
+    assert older.id is not None and newer.id is not None
+    await ingestion.upsert_item(
+        run_id=older.id,
+        metacritic_slug="elden-ring",
+        process_date=date(2026, 9, 7),
+        stage=IngestionStage.reviews,
+        status=IngestionItemStatus.failed,
+        error_type="TimeoutError",
+        error_message="old",
+    )
+    await ingestion.upsert_item(
+        run_id=newer.id,
+        metacritic_slug="elden-ring",
+        process_date=date(2026, 9, 7),
+        stage=IngestionStage.reviews,
+        status=IngestionItemStatus.completed,
+    )
+    await ingestion.upsert_item(
+        run_id=newer.id,
+        metacritic_slug="sekiro",
+        process_date=date(2026, 9, 7),
+        stage=IngestionStage.letsplay,
+        status=IngestionItemStatus.running,
+    )
+    found = await ingestion.latest_items_for_slugs(("elden-ring", "sekiro"))
+    reviews = found[("elden-ring", IngestionStage.reviews)]
+    assert reviews.status is IngestionItemStatus.completed
+    assert found[("sekiro", IngestionStage.letsplay)].status is IngestionItemStatus.running
+    assert ("sekiro", IngestionStage.reviews) not in found
+
+
 async def test_heartbeat_upsert_by_instance(session: AsyncSession) -> None:
     ingestion = IngestionRepository(session)
     observed = datetime(2026, 9, 7, 10, 0, tzinfo=UTC)

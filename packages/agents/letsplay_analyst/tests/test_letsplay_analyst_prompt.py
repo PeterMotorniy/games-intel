@@ -20,13 +20,15 @@ def test_prompt_file_is_in_git() -> None:
     assert relative.as_posix() == "packages/agents/letsplay_analyst/prompts/prompt.md"
 
 
-def test_prompt_declares_schema_russian_and_untrusted_data() -> None:
+def test_prompt_declares_schema_english_and_untrusted_data() -> None:
     text = load_prompt_template(Settings().prompts.letsplay_analyst_path)
     lowered = text.lower()
     assert "conclusion" in lowered
     assert "highlights" in lowered
     assert "letsplayconclusion" in lowered or "pydantic" in lowered
-    assert "русск" in lowered or "russian" in lowered
+    assert "english" in lowered
+    assert "russian" not in lowered
+    assert "русск" not in lowered
     assert "untrusted" in lowered or "data only" in lowered
     assert "https://www.youtube.com" not in lowered
     assert "visit http" not in lowered

@@ -360,6 +360,7 @@ class MetacriticAdapterSettings(BaseModel):
 class YoutubeAdapterSettings(BaseModel):
     model_config = _STRICT
 
+    # Unused: search/captions/audio go through yt-dlp. Kept so env overlay still loads.
     api_key: SecretStr = SecretStr("")
     timeout_seconds: int = 30
     search_query_template: str = "{title} let's play"

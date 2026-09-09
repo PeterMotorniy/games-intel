@@ -75,25 +75,44 @@ export function rollupStatus(statuses: PipelineTaskStatus[]): PipelineTaskStatus
   return "completed";
 }
 
-function itemErrors(items: MonitorItemRead[]): TaskError[] {
-  return items
-    .filter((item) => item.status === "failed" || item.status === "degraded")
-    .map((item) => ({
-      slug: item.metacritic_slug,
-      title: item.title ?? null,
-      errorType: item.error_type ?? null,
-      errorMessage: item.error_message ?? null,
-    }));
+function isRunIdSlug(runId: string, slug: string): boolean {
+  return slug === runId;
 }
 
-function uniqueSlugs(items: MonitorItemRead[]): string[] {
+function hasStoredError(item: MonitorItemRead): boolean {
+  return (
+    item.status === "failed" ||
+    item.status === "degraded" ||
+    Boolean(item.error_type || item.error_message)
+  );
+}
+
+function toTaskError(item: MonitorItemRead, runId: string): TaskError {
+  return {
+    slug: isRunIdSlug(runId, item.metacritic_slug) ? "" : item.metacritic_slug,
+    title: item.title ?? null,
+    errorType: item.error_type ?? null,
+    errorMessage: item.error_message ?? null,
+  };
+}
+
+function itemErrors(items: MonitorItemRead[], runId: string): TaskError[] {
+  const gameErrors = items.filter((item) => !isRunIdSlug(runId, item.metacritic_slug) && hasStoredError(item));
+  if (gameErrors.length > 0) {
+    return gameErrors.map((item) => toTaskError(item, runId));
+  }
+  return items.filter((item) => isRunIdSlug(runId, item.metacritic_slug) && hasStoredError(item)).map((item) => toTaskError(item, runId));
+}
+
+function uniqueSlugs(items: MonitorItemRead[], runId: string): string[] {
   const seen = new Set<string>();
   const ordered: string[] = [];
   for (const item of items) {
-    if (!seen.has(item.metacritic_slug)) {
-      seen.add(item.metacritic_slug);
-      ordered.push(item.metacritic_slug);
+    if (isRunIdSlug(runId, item.metacritic_slug) || seen.has(item.metacritic_slug)) {
+      continue;
     }
+    seen.add(item.metacritic_slug);
+    ordered.push(item.metacritic_slug);
   }
   return ordered;
 }
@@ -112,6 +131,34 @@ function latest(values: string[]): string | null {
   return [...values].sort()[values.length - 1] ?? null;
 }
 
+export function runPageNumber(run: MonitorRunRead): number {
+  return run.page ?? 0;
+}
+
+export function runGraphTitle(run: MonitorRunRead): string {
+  const trigger = run.trigger === "manual" ? "Manual" : "Scheduled";
+  return `${trigger} run page ${runPageNumber(run)}`;
+}
+
+function idleDownstreamBranch(run: MonitorRunRead, catalog: PipelineTask): PipelineGameBranch {
+  const catalogTerminal =
+    catalog.status === "completed" || catalog.status === "failed" || catalog.status === "degraded";
+  const status: PipelineTaskStatus = catalogTerminal ? "completed" : "pending";
+  return {
+    slug: "",
+    title: null,
+    tasks: DOWNSTREAM_STAGES.map((stage) => ({
+      id: `${run.id}:_:${stage}`,
+      kind: stage,
+      label: STAGE_LABEL[stage],
+      status,
+      startedAt: catalog.startedAt,
+      endedAt: status === "completed" ? catalog.endedAt : null,
+      errors: [],
+    })),
+  };
+}
+
 function catalogStatusForRun(run: MonitorRunRead, catalogItems: MonitorItemRead[], slugs: string[]): PipelineTaskStatus {
   if (catalogItems.length === 0) {
     if (run.status === "failed") {
@@ -125,9 +172,18 @@ function catalogStatusForRun(run: MonitorRunRead, catalogItems: MonitorItemRead[
     }
     return "pending";
   }
-  const statuses: PipelineTaskStatus[] = catalogItems.map((item) => item.status);
+  const pageFailed = catalogItems.some(
+    (item) =>
+      isRunIdSlug(run.id, item.metacritic_slug) &&
+      (item.status === "failed" || item.status === "degraded" || Boolean(item.error_type || item.error_message)),
+  );
+  const statuses: PipelineTaskStatus[] = catalogItems
+    .filter((item) => !isRunIdSlug(run.id, item.metacritic_slug))
+    .map((item) => item.status);
   const cataloged = new Set(
-    catalogItems.filter((item) => item.stage === "cataloged").map((item) => item.metacritic_slug),
+    catalogItems
+      .filter((item) => item.stage === "cataloged" && !isRunIdSlug(run.id, item.metacritic_slug))
+      .map((item) => item.metacritic_slug),
   );
   for (const slug of slugs) {
     if (!cataloged.has(slug)) {
@@ -135,7 +191,7 @@ function catalogStatusForRun(run: MonitorRunRead, catalogItems: MonitorItemRead[
         (item) => item.metacritic_slug === slug && item.stage === "discovered" && item.status === "completed",
       );
       if (discovered) {
-        statuses.push("pending");
+        statuses.push(pageFailed || run.status === "failed" ? "failed" : "pending");
       }
     }
   }
@@ -145,7 +201,7 @@ function catalogStatusForRun(run: MonitorRunRead, catalogItems: MonitorItemRead[
 export function buildRunGraph(run: MonitorRunRead, items: MonitorItemRead[]): PipelineRunGraph {
   const mine = items.filter((item) => item.run_id === run.id);
   const catalogItems = mine.filter((item) => CATALOG_STAGES.has(item.stage));
-  const slugs = uniqueSlugs(mine);
+  const slugs = uniqueSlugs(mine, run.id);
   const bySlug = new Map<string, MonitorItemRead[]>();
   for (const item of mine) {
     const list = bySlug.get(item.metacritic_slug) ?? [];
@@ -197,7 +253,7 @@ export function buildRunGraph(run: MonitorRunRead, items: MonitorItemRead[]): Pi
     endedAt: catalogRunning
       ? null
       : latest(catalogItems.map((item) => item.updated_at)) ?? run.completed_at ?? null,
-    errors: itemErrors(catalogItems),
+    errors: itemErrors(catalogItems, run.id),
   };
 
   const games: PipelineGameBranch[] = slugs
@@ -217,7 +273,7 @@ export function buildRunGraph(run: MonitorRunRead, items: MonitorItemRead[]): Pi
             status: item.status,
             startedAt: item.status === "running" ? item.updated_at : catalogedAt ?? item.updated_at,
             endedAt: terminal ? item.updated_at : null,
-            errors: itemErrors([item]),
+            errors: itemErrors([item], run.id),
             slug,
             title,
           };
@@ -238,7 +294,12 @@ export function buildRunGraph(run: MonitorRunRead, items: MonitorItemRead[]): Pi
     })
     .sort((a, b) => (a.title ?? a.slug).localeCompare(b.title ?? b.slug));
 
-  return { run, runTask, catalogTask, games };
+  return {
+    run,
+    runTask,
+    catalogTask,
+    games: games.length > 0 ? games : [idleDownstreamBranch(run, catalogTask)],
+  };
 }
 
 export function sortRunsNewestFirst(runs: MonitorRunRead[]): MonitorRunRead[] {

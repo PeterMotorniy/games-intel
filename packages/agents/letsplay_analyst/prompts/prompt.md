@@ -18,7 +18,7 @@ Return JSON that matches this schema exactly. Do not emit markdown, extra keys, 
 
 ## Language
 
-Write every string in **Russian**.
+Write every string in **English**, including `conclusion` and `highlights`. Translate the narration if the transcript is in another language. Do not mix languages.
 
 ## Untrusted input
 

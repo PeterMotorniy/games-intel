@@ -8,11 +8,10 @@ from pathlib import Path
 from typing import Protocol
 
 from games_intel.adapters.youtube.exceptions import YoutubeAdapterError
-from games_intel.adapters.youtube.ids import is_safe_video_id
+from games_intel.adapters.youtube.ids import is_safe_video_id, watch_url
+from games_intel.adapters.youtube.ydl import ydl_options
 
 logger = logging.getLogger("games_intel.adapters.youtube")
-
-_WATCH_URL = "https://www.youtube.com/watch?v={video_id}"
 
 
 class AudioDownloader(Protocol):
@@ -21,6 +20,9 @@ class AudioDownloader(Protocol):
 
 class YtDlpAudioDownloader:
     """Clip audio to max_duration_seconds. Does not run STT."""
+
+    def __init__(self, timeout_seconds: int = 30) -> None:
+        self._timeout_seconds = timeout_seconds
 
     def download(self, video_id: str, max_duration_seconds: int) -> str | None:
         if not is_safe_video_id(video_id):
@@ -37,17 +39,14 @@ class YtDlpAudioDownloader:
         def _ranges(_info: object, _ydl: object) -> list[dict[str, float]]:
             return [{"start_time": 0.0, "end_time": float(end)}]
 
-        options = {
-            "format": "bestaudio/best",
-            "outtmpl": outtmpl,
-            "quiet": True,
-            "no_warnings": True,
-            "noprogress": True,
-            "download_ranges": _ranges,
-            "force_keyframes_at_cuts": True,
-            "noplaylist": True,
-        }
-        url = _WATCH_URL.format(video_id=video_id)
+        options = ydl_options(
+            self._timeout_seconds,
+            format="bestaudio/best",
+            outtmpl=outtmpl,
+            download_ranges=_ranges,
+            noplaylist=True,
+        )
+        url = watch_url(video_id)
         try:
             with yt_dlp.YoutubeDL(options) as ydl:
                 ydl.download([url])

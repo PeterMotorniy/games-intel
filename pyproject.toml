@@ -175,8 +175,6 @@ ignore_missing_imports = true
 
 [[tool.mypy.overrides]]
 module = [
-    "youtube_transcript_api",
-    "youtube_transcript_api.*",
     "yt_dlp",
     "yt_dlp.*",
 ]

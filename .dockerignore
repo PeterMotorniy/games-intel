@@ -10,9 +10,7 @@
 **/node_modules
 apps/web/dist
 docs
-.epic-workflows
-.cursor
-agent-transcripts
+llm-transcripts.jsonl
 **/*.egg-info
 .coverage
 htmlcov

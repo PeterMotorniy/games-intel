@@ -100,7 +100,7 @@ describe("MonitorPage", () => {
     mockFetch(() => jsonResponse(SNAPSHOT));
     const user = userEvent.setup();
     renderWithApp(<MonitorPage />);
-    expect(await screen.findByRole("heading", { name: /Manual run/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Manual run page 0" })).toBeInTheDocument();
     expect(screen.getByText("Step 1")).toBeInTheDocument();
     expect(screen.getByText("Step 2")).toBeInTheDocument();
     expect(screen.getByText("then")).toBeInTheDocument();
@@ -154,7 +154,7 @@ describe("MonitorPage", () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     mockFetch(() => jsonResponse(SNAPSHOT));
     renderWithApp(<MonitorPage />);
-    expect(await screen.findByRole("heading", { name: /Manual run/ })).toBeInTheDocument();
+    expect(await screen.findByRole("heading", { name: "Manual run page 0" })).toBeInTheDocument();
     const source = FakeEventSource.instances[0];
     expect(source).toBeDefined();
     source.emit({
@@ -177,5 +177,31 @@ describe("MonitorPage", () => {
     expect(await screen.findByRole("button", { name: /Collect let's play, Running/i })).toBeInTheDocument();
     const gets = vi.mocked(fetch).mock.calls.filter(([, init]) => (init?.method ?? "GET") !== "POST");
     expect(gets).toHaveLength(1);
+  });
+
+  it("always shows review and lets play tasks on an empty browse page", async () => {
+    vi.stubGlobal("EventSource", FakeEventSource);
+    mockFetch(() =>
+      jsonResponse({
+        ...SNAPSHOT,
+        runs: [
+          {
+            ...SNAPSHOT.runs[0],
+            source: "browse",
+            page: 1,
+            status: "completed",
+            discovered_count: 0,
+            completed_at: "2026-09-08T12:00:12Z",
+          },
+        ],
+        items: [],
+      }),
+    );
+    renderWithApp(<MonitorPage />);
+    expect(await screen.findByRole("heading", { name: "Manual run page 1" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Collect reviews, Completed/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Collect let's play, Completed/i })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: /Find similar games, Completed/i })).toBeInTheDocument();
+    expect(screen.getByText(/No new games this run/)).toBeInTheDocument();
   });
 });

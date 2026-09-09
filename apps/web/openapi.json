@@ -1,6 +1,49 @@
 {
   "components": {
     "schemas": {
+      "CollectionStateRead": {
+        "additionalProperties": false,
+        "properties": {
+          "error_message": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Message"
+          },
+          "error_type": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Error Type"
+          },
+          "status": {
+            "enum": [
+              "idle",
+              "loading",
+              "empty",
+              "error",
+              "ready"
+            ],
+            "title": "Status",
+            "type": "string"
+          }
+        },
+        "required": [
+          "status"
+        ],
+        "title": "CollectionStateRead",
+        "type": "object"
+      },
       "GameCardRead": {
         "additionalProperties": false,
         "properties": {
@@ -53,6 +96,9 @@
             },
             "title": "Genres",
             "type": "array"
+          },
+          "hydration": {
+            "$ref": "#/components/schemas/GameHydrationRead"
           },
           "letsplay": {
             "anyOf": [
@@ -133,14 +179,47 @@
         },
         "required": [
           "metacritic_slug",
-          "title"
+          "title",
+          "hydration"
         ],
         "title": "GameCardRead",
+        "type": "object"
+      },
+      "GameHydrationRead": {
+        "additionalProperties": false,
+        "properties": {
+          "catalog": {
+            "$ref": "#/components/schemas/CollectionStateRead"
+          },
+          "critic": {
+            "$ref": "#/components/schemas/CollectionStateRead"
+          },
+          "letsplay": {
+            "$ref": "#/components/schemas/CollectionStateRead"
+          },
+          "similar": {
+            "$ref": "#/components/schemas/CollectionStateRead"
+          },
+          "user": {
+            "$ref": "#/components/schemas/CollectionStateRead"
+          }
+        },
+        "required": [
+          "catalog",
+          "critic",
+          "user",
+          "letsplay",
+          "similar"
+        ],
+        "title": "GameHydrationRead",
         "type": "object"
       },
       "GameListItemRead": {
         "additionalProperties": false,
         "properties": {
+          "catalog_collection": {
+            "$ref": "#/components/schemas/CollectionStateRead"
+          },
           "cover_url": {
             "anyOf": [
               {
@@ -209,7 +288,8 @@
         "required": [
           "metacritic_slug",
           "title",
-          "updated_at"
+          "updated_at",
+          "catalog_collection"
         ],
         "title": "GameListItemRead",
         "type": "object"

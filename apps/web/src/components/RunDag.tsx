@@ -2,7 +2,12 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router";
 
 import { displayTitle, formatDateTime, formatTaskTiming } from "../lib/format";
-import type { PipelineGameBranch, PipelineRunGraph, PipelineTask } from "../lib/pipeline-dag";
+import {
+  runGraphTitle,
+  type PipelineGameBranch,
+  type PipelineRunGraph,
+  type PipelineTask,
+} from "../lib/pipeline-dag";
 import { TASK_STATUS_LABEL } from "../lib/status";
 
 type RunDagProps = {
@@ -60,13 +65,14 @@ function GameBranch({
   nowMs: number;
   onSelect: (task: PipelineTask) => void;
 }) {
-  const name = displayTitle(branch.title, branch.slug);
   return (
     <li className="dag-game">
       <p className="dag-stage__label">{step}</p>
-      <p className="dag-game__title">
-        <Link to={`/games/${branch.slug}`}>{name}</Link>
-      </p>
+      {branch.slug ? (
+        <p className="dag-game__title">
+          <Link to={`/games/${branch.slug}`}>{displayTitle(branch.title, branch.slug)}</Link>
+        </p>
+      ) : null}
       <ul className="dag-game__fork">
         {branch.tasks.map((task) => (
           <li key={task.id}>
@@ -79,7 +85,9 @@ function GameBranch({
 }
 
 export function RunDag({ graph, onSelectTask }: RunDagProps) {
-  const trigger = graph.run.trigger === "manual" ? "Manual" : "Scheduled";
+  const title = runGraphTitle(graph.run);
+  const namedGames = graph.games.filter((branch) => branch.slug !== "");
+  const showGameFanout = namedGames.length > 0;
   const live =
     graph.runTask.status === "running" ||
     graph.catalogTask.status === "running" ||
@@ -88,19 +96,12 @@ export function RunDag({ graph, onSelectTask }: RunDagProps) {
   return (
     <section className="panel run-graph" aria-labelledby={`run-${graph.run.id}-heading`}>
       <header className="run-graph__header">
-        <h2 id={`run-${graph.run.id}-heading`}>
-          {trigger} run
-          {graph.run.page != null
-            ? ` page ${graph.run.page}`
-            : graph.run.source === "new_releases"
-              ? " · new releases"
-              : ""}
-        </h2>
+        <h2 id={`run-${graph.run.id}-heading`}>{title}</h2>
         <p className="muted">
           {graph.run.started_at ? formatDateTime(graph.run.started_at) : "Not started"}
         </p>
       </header>
-      <div className="dag" role="group" aria-label={`Pipeline graph for ${trigger.toLowerCase()} run`}>
+      <div className="dag" role="group" aria-label={`Pipeline graph for ${title}`}>
         <div className="dag-stage">
           <p className="dag-stage__label">Step 1</p>
           <TaskNode task={graph.runTask} nowMs={nowMs} onSelect={onSelectTask} />
@@ -109,28 +110,25 @@ export function RunDag({ graph, onSelectTask }: RunDagProps) {
         <div className="dag-stage dag-stage--catalog">
           <p className="dag-stage__label">Step 2</p>
           <TaskNode task={graph.catalogTask} nowMs={nowMs} onSelect={onSelectTask} />
-          {graph.games.length > 0 ? (
-            <div className="dag-fanout">
-              <p className="dag-then dag-then--down">then each game</p>
-              <ol className="dag-games">
-                {graph.games.map((branch, index) => (
-                  <GameBranch
-                    key={branch.slug}
-                    branch={branch}
-                    step={`Step 3.${index + 1}`}
-                    nowMs={nowMs}
-                    onSelect={onSelectTask}
-                  />
-                ))}
-              </ol>
-            </div>
-          ) : (
-            <p className="muted dag-empty">
-              {graph.run.status === "completed" && graph.run.discovered_count === 0
-                ? "No new games this run. They were already collected today or the listing was empty."
-                : "Waiting for game cards from this run."}
-            </p>
-          )}
+          <div className="dag-fanout">
+            <p className="dag-then dag-then--down">{showGameFanout ? "then each game" : "then"}</p>
+            <ol className="dag-games">
+              {(showGameFanout ? namedGames : graph.games).map((branch, index) => (
+                <GameBranch
+                  key={branch.slug || `${graph.run.id}:empty`}
+                  branch={branch}
+                  step={showGameFanout ? `Step 3.${index + 1}` : "Step 3"}
+                  nowMs={nowMs}
+                  onSelect={onSelectTask}
+                />
+              ))}
+            </ol>
+            {!showGameFanout && graph.run.status === "completed" && graph.run.discovered_count === 0 ? (
+              <p className="muted dag-empty">
+                No new games this run. They were already collected today or the listing was empty.
+              </p>
+            ) : null}
+          </div>
         </div>
       </div>
     </section>

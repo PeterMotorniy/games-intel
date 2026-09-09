@@ -24,6 +24,10 @@ env/
 config.yaml
 config.local.yaml
 
+# Scratch / one-off scripts
+tmp_*.py
+artifacts/
+
 # Media volume
 media/
 *.jpg
@@ -39,6 +43,8 @@ apps/web/coverage/
 # Editors / OS
 .idea/
 .vscode/
+.cursor/
+.epic-workflows/
 *.swp
 Thumbs.db
 Desktop.ini

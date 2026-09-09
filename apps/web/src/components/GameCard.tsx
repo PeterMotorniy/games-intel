@@ -12,18 +12,24 @@ type GameCardProps = {
 export function GameCard({ game }: GameCardProps) {
   const platforms = game.platforms ?? [];
   const title = displayTitle(game.title, game.metacritic_slug);
+  const catalog = game.catalog_collection;
   return (
     <Link className="game-card-link" to={`/games/${game.metacritic_slug}`}>
       <article className="game-card">
-        <CoverImage title={title} coverUrl={game.cover_url} className="game-card__cover" />
+        <CoverImage
+          title={title}
+          coverUrl={game.cover_url}
+          collection={catalog}
+          className="game-card__cover"
+        />
         <div className="game-card__body">
           <h2 className="game-card__title">{title}</h2>
           {game.developer?.trim() ? (
             <p className="meta-pill meta-pill--developer">{game.developer}</p>
           ) : null}
           <div className="game-card__scores">
-            <ScoreBadge value={game.metascore} kind="meta" label="Metascore" />
-            <ScoreBadge value={game.userscore} kind="user" label="Userscore" />
+            <ScoreBadge value={game.metascore} kind="meta" label="Metascore" collection={catalog} />
+            <ScoreBadge value={game.userscore} kind="user" label="Userscore" collection={catalog} />
           </div>
           {platforms.length > 0 ? (
             <ul className="chips" aria-label="Platforms">

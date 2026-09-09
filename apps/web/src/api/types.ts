@@ -1,5 +1,7 @@
 import type { components, operations } from "./schema";
 
+export type CollectionStateRead = components["schemas"]["CollectionStateRead"];
+export type GameHydrationRead = components["schemas"]["GameHydrationRead"];
 export type GameCard = components["schemas"]["GameCardRead"];
 export type GameListItem = components["schemas"]["GameListItemRead"];
 export type GameListResponse = components["schemas"]["GameListResponse"];

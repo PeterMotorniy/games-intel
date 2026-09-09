@@ -14,8 +14,10 @@ from games_intel.adapters.media.storage import FilesystemCoverStorage
 from games_intel.api.app import ReadyFn, create_app
 from games_intel.db.records import CatalogSlice, PlatformScoreRecord, ReviewsSlice, SimilarNeighbor
 from games_intel.db.repositories.catalog import GameCatalogRepository
+from games_intel.db.repositories.ingestion import IngestionRepository
 from games_intel.db.repositories.reviews import GameReviewsRepository
 from games_intel.db.repositories.similar import SimilarGamesRepository
+from games_intel.db.types import IngestionItemStatus, IngestionStage, RunTrigger
 from games_intel.settings import Settings
 from games_intel.settings.config import MediaSettings
 
@@ -125,6 +127,8 @@ def test_openapi_contains_games_paths_and_read_schemas() -> None:
     assert "ProblemDetails" in models
     card = models["GameCardRead"]["properties"]
     assert "letsplay" in card
+    assert "hydration" in card
+    assert "catalog_collection" in models["GameListItemRead"]["properties"]
     assert "critic" in card
     similar_ref = models["SimilarGameRef"]["properties"]["score"]
     assert similar_ref.get("type") == "number" or "number" in str(similar_ref)
@@ -263,6 +267,69 @@ async def test_game_card_404_and_partial_hydration(
     assert body["letsplay"] is None
     assert body["similar"] == []
     assert body["title"] == "Partial"
+    assert body["hydration"]["catalog"]["status"] == "ready"
+    assert body["hydration"]["critic"]["status"] == "idle"
+    assert body["hydration"]["user"]["status"] == "idle"
+    assert body["hydration"]["letsplay"]["status"] == "idle"
+    assert body["hydration"]["similar"]["status"] == "idle"
+
+
+async def test_game_card_collection_states_follow_ingestion_items(
+    api_client: httpx.AsyncClient,
+    session: AsyncSession,
+) -> None:
+    catalog = GameCatalogRepository(session)
+    ingestion = IngestionRepository(session)
+    await catalog.upsert_catalog(
+        CatalogSlice(
+            metacritic_slug="bare-game",
+            title="Bare Game",
+            listing_url="https://www.metacritic.com/game/bare-game/",
+        )
+    )
+    run = await ingestion.create_run(
+        process_date=date(2026, 9, 8),
+        source="new_releases",
+        page=None,
+        limit=20,
+        trigger=RunTrigger.manual,
+    )
+    assert run.id is not None
+    await ingestion.upsert_item(
+        run_id=run.id,
+        metacritic_slug="bare-game",
+        process_date=date(2026, 9, 8),
+        stage=IngestionStage.cataloged,
+        status=IngestionItemStatus.running,
+    )
+    await ingestion.upsert_item(
+        run_id=run.id,
+        metacritic_slug="bare-game",
+        process_date=date(2026, 9, 8),
+        stage=IngestionStage.reviews,
+        status=IngestionItemStatus.completed,
+    )
+    await ingestion.upsert_item(
+        run_id=run.id,
+        metacritic_slug="bare-game",
+        process_date=date(2026, 9, 8),
+        stage=IngestionStage.letsplay,
+        status=IngestionItemStatus.failed,
+        error_type="TimeoutError",
+        error_message="sidecar request timed out",
+    )
+    await session.commit()
+
+    response = await api_client.get("/api/v1/games/bare-game")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["hydration"]["catalog"]["status"] == "loading"
+    assert body["hydration"]["critic"]["status"] == "empty"
+    assert body["hydration"]["user"]["status"] == "empty"
+    assert body["hydration"]["letsplay"]["status"] == "error"
+    assert body["hydration"]["letsplay"]["error_type"] == "TimeoutError"
+    listed = await api_client.get("/api/v1/games")
+    assert listed.json()["items"][0]["catalog_collection"]["status"] == "loading"
 
 
 async def test_game_card_similar_excludes_self(

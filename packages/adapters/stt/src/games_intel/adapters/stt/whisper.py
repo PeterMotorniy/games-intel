@@ -33,7 +33,7 @@ _AUDIO_MIME: dict[str, str] = {
 
 
 class OpenAiWhisperStt:
-    """OpenAI Whisper API (`POST /v1/audio/transcriptions`)."""
+    """OpenAI Whisper API (`POST /v1/audio/translations`) — English transcript."""
 
     def __init__(
         self,
@@ -64,7 +64,7 @@ class OpenAiWhisperStt:
         headers = {"Authorization": f"Bearer {self._api_key}"}
         try:
             response = await self._client.post(
-                "/audio/transcriptions",
+                "/audio/translations",
                 files=files,
                 data=data,
                 headers=headers,
@@ -91,8 +91,7 @@ def _parse_transcript(body: object) -> TranscribeResult:
     text = body.get("text")
     if not isinstance(text, str):
         raise SttAdapterError("parse_error", "stt text missing")
-    language = body.get("language")
     return TranscribeResult(
         text=text.strip(),
-        language=str(language) if language else None,
+        language="en",
     )

@@ -2,6 +2,7 @@ import { Link, useParams } from "react-router";
 
 import { ApiError } from "../api/client";
 import { useGameQuery } from "../api/queries";
+import { CollectionSlot } from "../components/CollectionNotice";
 import { CoverImage } from "../components/CoverImage";
 import { LetsPlayBlock } from "../components/LetsPlayBlock";
 import { MetacriticLink } from "../components/MetacriticLink";
@@ -46,6 +47,8 @@ export function GamePage() {
   }
 
   const game = query.data;
+  const hydration = game.hydration;
+  const catalog = hydration.catalog;
   const platforms = game.platforms ?? [];
   const genres = game.genres ?? [];
   const release = formatReleaseDate(game.release_date);
@@ -59,20 +62,68 @@ export function GamePage() {
         <Link to="/">Back to catalog</Link>
       </p>
       <header className="game-hero">
-        <CoverImage title={title} coverUrl={game.cover_url} className="game-hero__cover" />
+        <CoverImage
+          title={title}
+          coverUrl={game.cover_url}
+          collection={catalog}
+          className="game-hero__cover"
+        />
         <div className="game-hero__meta">
           <h1>{title}</h1>
           <div className="game-hero__pills">
-            {developer ? <p className="meta-pill meta-pill--developer">{developer}</p> : null}
-            {publisher ? <p className="meta-pill meta-pill--publisher">{publisher}</p> : null}
             <MetacriticLink slug={game.metacritic_slug} />
           </div>
-          {release ? (
-            <p>
-              <span className="meta-label">Released</span> {release}
-            </p>
-          ) : null}
-          {genres.length > 0 ? (
+          <dl className="game-facts">
+            <div className="game-fact">
+              <dt>Developer</dt>
+              <dd>
+                <CollectionSlot
+                  collection={catalog}
+                  hasValue={Boolean(developer)}
+                  topic="Developer"
+                  layout="compact"
+                  emptyTitle="No developer on Metacritic"
+                >
+                  <p className="meta-pill meta-pill--developer">{developer}</p>
+                </CollectionSlot>
+              </dd>
+            </div>
+            <div className="game-fact">
+              <dt>Publisher</dt>
+              <dd>
+                <CollectionSlot
+                  collection={catalog}
+                  hasValue={Boolean(publisher)}
+                  topic="Publisher"
+                  layout="compact"
+                  emptyTitle="No publisher on Metacritic"
+                >
+                  <p className="meta-pill meta-pill--publisher">{publisher}</p>
+                </CollectionSlot>
+              </dd>
+            </div>
+            <div className="game-fact">
+              <dt>Released</dt>
+              <dd>
+                <CollectionSlot
+                  collection={catalog}
+                  hasValue={Boolean(release)}
+                  topic="Release date"
+                  layout="compact"
+                  emptyTitle="No release date on Metacritic"
+                >
+                  <p>{release}</p>
+                </CollectionSlot>
+              </dd>
+            </div>
+          </dl>
+          <CollectionSlot
+            collection={catalog}
+            hasValue={genres.length > 0}
+            topic="Genres"
+            layout="compact"
+            emptyTitle="No genres on Metacritic"
+          >
             <ul className="chips" aria-label="Genres">
               {genres.map((genre) => (
                 <li key={genre} className="chip chip--genre">
@@ -80,50 +131,91 @@ export function GamePage() {
                 </li>
               ))}
             </ul>
-          ) : null}
+          </CollectionSlot>
         </div>
       </header>
 
-      {platforms.length > 0 ? (
-        <section className="panel" aria-labelledby="platforms-heading">
-          <h2 id="platforms-heading">Platforms and scores</h2>
+      <section className="panel" aria-labelledby="platforms-heading">
+        <h2 id="platforms-heading">Platforms and scores</h2>
+        <CollectionSlot
+          collection={catalog}
+          hasValue={platforms.length > 0}
+          topic="Platforms and scores"
+          emptyTitle="No platforms or scores on Metacritic"
+        >
           <ul className="platform-scores">
             {platforms.map((row) => (
               <li key={row.platform_code} className="platform-scores__row">
                 <span className="chip chip--platform">{row.platform_code}</span>
-                <ScoreBadge value={row.metascore} kind="meta" label="Metascore" />
-                <ScoreBadge value={row.userscore} kind="user" label="Userscore" />
+                <ScoreBadge
+                  value={row.metascore}
+                  kind="meta"
+                  label="Metascore"
+                  collection={catalog}
+                />
+                <ScoreBadge
+                  value={row.userscore}
+                  kind="user"
+                  label="Userscore"
+                  collection={catalog}
+                />
               </li>
             ))}
           </ul>
-        </section>
-      ) : null}
+        </CollectionSlot>
+      </section>
 
-      {game.description ? (
-        <section className="panel" aria-labelledby="description-heading">
-          <h2 id="description-heading">Description</h2>
+      <section className="panel" aria-labelledby="description-heading">
+        <h2 id="description-heading">Description</h2>
+        <CollectionSlot
+          collection={catalog}
+          hasValue={Boolean(game.description?.trim())}
+          topic="Description"
+          emptyTitle="No description on Metacritic"
+        >
           <p>{game.description}</p>
-        </section>
-      ) : null}
+        </CollectionSlot>
+      </section>
 
-      {game.video_url ? (
-        <section className="panel" aria-labelledby="video-heading">
-          <h2 id="video-heading">Video</h2>
+      <section className="panel" aria-labelledby="video-heading">
+        <h2 id="video-heading">Video</h2>
+        <CollectionSlot
+          collection={catalog}
+          hasValue={Boolean(game.video_url)}
+          topic="Video"
+          emptyTitle="No trailer on Metacritic"
+        >
           <p>
-            <a href={game.video_url} rel="noreferrer" target="_blank">
+            <a href={game.video_url ?? undefined} rel="noreferrer" target="_blank">
               Watch trailer
             </a>
           </p>
-        </section>
-      ) : null}
+        </CollectionSlot>
+      </section>
 
-      <ReviewBlock heading="Critic reviews" headingId="critic-reviews" summary={game.critic} />
-      <ReviewBlock heading="Player reviews" headingId="user-reviews" summary={game.user} />
-      <LetsPlayBlock letsplay={game.letsplay} />
+      <ReviewBlock
+        heading="Critic reviews"
+        headingId="critic-reviews"
+        topic="Critic reviews"
+        summary={game.critic}
+        collection={hydration.critic}
+      />
+      <ReviewBlock
+        heading="Player reviews"
+        headingId="user-reviews"
+        topic="Player reviews"
+        summary={game.user}
+        collection={hydration.user}
+      />
+      <LetsPlayBlock letsplay={game.letsplay} collection={hydration.letsplay} />
 
       <section className="panel" aria-labelledby="similar-heading">
         <h2 id="similar-heading">Similar games</h2>
-        <SimilarList currentSlug={game.metacritic_slug} items={game.similar} />
+        <SimilarList
+          currentSlug={game.metacritic_slug}
+          items={game.similar}
+          collection={hydration.similar}
+        />
       </section>
     </article>
   );

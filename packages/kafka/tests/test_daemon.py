@@ -7,9 +7,10 @@ from datetime import UTC, date, datetime
 from typing import Any
 from uuid import UUID
 
+from pydantic import HttpUrl
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
-from games_intel.contracts import GameCataloged, build_cloud_event
+from games_intel.contracts import GameCataloged, GamesPageListed, ListedGame, build_cloud_event
 from games_intel.db.repositories.catalog import GameCatalogRepository
 from games_intel.db.repositories.ingestion import IngestionRepository
 from games_intel.db.types import IngestionItemStatus, IngestionStage, RunTrigger
@@ -88,6 +89,41 @@ def _record(event: Any) -> IncomingRecord:
     )
 
 
+def _page_listed(*, event_id: str) -> Any:
+    settings = _settings()
+    data = GamesPageListed(
+        run_id=RUN_ID,
+        process_date=PROCESS_DATE,
+        source="new_releases",
+        page=None,
+        games=[
+            ListedGame(
+                metacritic_slug="elden-ring",
+                title="Elden Ring",
+                listing_url=HttpUrl("https://www.metacritic.com/game/elden-ring/"),
+                position=0,
+            ),
+            ListedGame(
+                metacritic_slug="sekiro",
+                title="Sekiro",
+                listing_url=HttpUrl("https://www.metacritic.com/game/sekiro/"),
+                position=1,
+            ),
+        ],
+    )
+    return build_cloud_event(
+        settings,
+        "page_listed",
+        source=worker_source(settings, "discovery"),
+        subject=str(RUN_ID),
+        data=data,
+        stage="discovered",
+        run_id=RUN_ID,
+        event_id=event_id,
+        occurred_at=NOW,
+    )
+
+
 def _loop(
     session_factory: async_sessionmaker[AsyncSession],
     handler: StubHandler,
@@ -95,20 +131,21 @@ def _loop(
     instance_id: str = "catalog-1",
     worker_type: str = "catalog",
     stage_name: str = "cataloged",
+    subscribe_event_key: str = "game_cataloged",
     consumer: FakeConsumer | None = None,
     producer: FakeProducer | None = None,
 ) -> tuple[DaemonLoop, FakeBroker, FakeConsumer]:
     settings = _settings()
     broker = producer.broker if producer is not None else FakeBroker()
     fake_producer = producer or FakeProducer(broker)
-    fake_consumer = consumer or FakeConsumer(broker, (settings.event_name("game_cataloged"),))
+    fake_consumer = consumer or FakeConsumer(broker, (settings.event_name(subscribe_event_key),))
     loop = DaemonLoop(
         settings,
         DaemonConfig(
             worker_type=worker_type,
             instance_id=instance_id,
             stage_name=stage_name,
-            subscribe_event_key="game_cataloged",
+            subscribe_event_key=subscribe_event_key,
         ),
         consumer=fake_consumer,
         producer=fake_producer,
@@ -273,6 +310,37 @@ async def test_transient_max_attempts_fails_item(
     dlq = json.loads(broker.topics[_settings().event_name("dlq")][0].value.decode("utf-8"))
     assert dlq["data"]["reason"] == "timeout"
     assert await GameCatalogRepository(session).get_by_slug("elden-ring") is None
+
+
+async def test_page_listed_transient_fails_game_slugs_not_run_id(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _seed_run(session)
+    handler = StubHandler(fail=TransientError("sidecar timeout"), fail_times=10)
+    event = _page_listed(event_id="evt-page-transient")
+    settings = _settings()
+    loop, broker, consumer = _loop(session_factory, handler, subscribe_event_key="page_listed")
+    record = IncomingRecord(
+        topic=settings.event_name("page_listed"),
+        partition=0,
+        offset=0,
+        key=event.subject,
+        value=encode_cloud_event(event),
+    )
+    await loop.process_record(record)
+    assert handler.calls == 3
+    ingestion = IngestionRepository(session)
+    first = await ingestion.get_item(RUN_ID, "elden-ring", IngestionStage.cataloged)
+    second = await ingestion.get_item(RUN_ID, "sekiro", IngestionStage.cataloged)
+    bogus = await ingestion.get_item(RUN_ID, str(RUN_ID), IngestionStage.cataloged)
+    assert first is not None and first.status is IngestionItemStatus.failed
+    assert second is not None and second.status is IngestionItemStatus.failed
+    assert first.attempt_count == 3
+    assert bogus is None
+    assert consumer.committed[(record.topic, 0)] == 1
+    dlq = json.loads(broker.topics[settings.event_name("dlq")][0].value.decode("utf-8"))
+    assert dlq["data"]["reason"] == "timeout"
 
 
 async def test_unexpected_handler_error_dlq_and_commits(

@@ -388,6 +388,32 @@ async def test_stt_on_uses_audio_then_analyst(
     assert analyst.calls[0].transcript_excerpt == "from stt"
 
 
+async def test_non_english_captions_use_stt_when_enabled(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _seed(session)
+    youtube = FakeYouTubeAdapter(
+        items=[_hit()],
+        transcripts={
+            VIDEO_ID: TranscriptResult(
+                status="ok", language="ru", text="мир огромен", truncated=False
+            )
+        },
+        audio={VIDEO_ID: AudioResult(status="ok", audio_ref="file://clip.wav")},
+    )
+    transcription = FakeTranscription(TranscriptionOutput(text="from stt english", language="en"))
+    analyst = FakeAnalyst()
+    handler, settings = _handler(youtube, transcription, analyst, stt_enabled=True)
+    loop, _, _ = _loop(session_factory, handler, settings)
+    await loop.process_record(
+        _record(_discovered(event_id="lp-ru-cap", settings=settings), settings)
+    )
+    assert len(youtube.audio_calls) == 1
+    assert transcription.calls[0].audio_ref == "file://clip.wav"
+    assert analyst.calls[0].transcript_excerpt == "from stt english"
+
+
 async def test_stt_fail_degrades_without_conclusion(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],

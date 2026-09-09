@@ -204,6 +204,7 @@ adapters:
         score: ".c-siteReviewScore, [data-gi-review-score]"
         author: ".c-siteReview_author, [data-gi-review-author], [data-testid='review-card-header']"
   youtube:
+    # Unused by yt-dlp; overlay GAMES_INTEL__ADAPTERS__YOUTUBE__API_KEY still accepted.
     api_key: ""
     timeout_seconds: 30
     search_query_template: "{title} let's play"

@@ -88,7 +88,7 @@ async def test_openai_whisper_transcribes_without_network() -> None:
     settings = _settings(enabled=True, api_key=SecretStr("test-key"), model="whisper-1")
 
     def handler(request: httpx.Request) -> httpx.Response:
-        assert request.url.path.endswith("/audio/transcriptions")
+        assert request.url.path.endswith("/audio/translations")
         assert request.headers.get("authorization") == "Bearer test-key"
         return httpx.Response(200, json={"text": "hello from clip", "language": "en"})
 

@@ -27,8 +27,8 @@ from games_intel.db.repositories.ingestion import IngestionRepository
 from games_intel.db.repositories.outbox import OutboxRepository
 from games_intel.db.types import IngestionItemStatus, IngestionStage
 from games_intel.kafka.classify import map_adapter_error
-from games_intel.kafka.exceptions import NotFoundError
-from games_intel.kafka.logging import emit_json
+from games_intel.kafka.exceptions import NotFoundError, ParseError, QuotaError, TransientError
+from games_intel.kafka.logging import emit_json, sanitize_error_message
 from games_intel.kafka.serialization import cloud_event_to_dict
 from games_intel.kafka.source import worker_source
 from games_intel.settings import Settings
@@ -46,10 +46,18 @@ class _CatalogGameSuccess:
 
 
 @dataclass(frozen=True, slots=True)
+class _CatalogGameFailure:
+    listed: ListedGame
+    error_type: str
+    error_message: str
+
+
+@dataclass(frozen=True, slots=True)
 class _CatalogPrepared:
     page: GamesPageListed
     successes: tuple[_CatalogGameSuccess, ...]
     missing: tuple[ListedGame, ...]
+    failures: tuple[_CatalogGameFailure, ...]
 
 
 class CatalogHandler:
@@ -67,18 +75,33 @@ class CatalogHandler:
             raise TypeError(msg)
         successes: list[_CatalogGameSuccess] = []
         missing: list[ListedGame] = []
+        failures: list[_CatalogGameFailure] = []
+        batch_error: BaseException | None = None
         for listed in page.games:
+            if batch_error is not None:
+                failures.append(_failure_from_exc(listed, batch_error))
+                continue
             try:
                 details = await self._get_game(listed.metacritic_slug)
             except NotFoundError:
                 missing.append(listed)
+                continue
+            except (TransientError, ParseError, QuotaError) as exc:
+                failures.append(_failure_from_exc(listed, exc))
+                if isinstance(exc, TransientError):
+                    batch_error = exc
                 continue
             cover_url = await self._store_cover(listed.metacritic_slug, details.cover_bytes)
             self._warn_optional_gaps(listed.metacritic_slug, details)
             successes.append(
                 _CatalogGameSuccess(listed=listed, details=details, cover_url=cover_url)
             )
-        return _CatalogPrepared(page=page, successes=tuple(successes), missing=tuple(missing))
+        return _CatalogPrepared(
+            page=page,
+            successes=tuple(successes),
+            missing=tuple(missing),
+            failures=tuple(failures),
+        )
 
     async def persist(
         self, event: CloudEvent[Any], session: AsyncSession, prepared: _CatalogPrepared
@@ -95,6 +118,17 @@ class CatalogHandler:
                 event_id=event.id,
                 error_type=NotFoundError.__name__,
                 error_message="game card not found",
+            )
+        for failed in prepared.failures:
+            await ingestion.upsert_item(
+                run_id=prepared.page.run_id,
+                metacritic_slug=failed.listed.metacritic_slug,
+                process_date=prepared.page.process_date,
+                stage=IngestionStage.cataloged,
+                status=IngestionItemStatus.failed,
+                event_id=event.id,
+                error_type=failed.error_type,
+                error_message=failed.error_message,
             )
         for item in prepared.successes:
             slice_ = _catalog_slice(item.listed, item.details, item.cover_url)
@@ -120,6 +154,37 @@ class CatalogHandler:
     async def handle(self, event: CloudEvent[Any], session: AsyncSession) -> None:
         prepared = await self.prepare(event)
         await self.persist(event, session, prepared)
+
+    async def on_terminal_failure(
+        self,
+        event: CloudEvent[Any],
+        session: AsyncSession,
+        exc: BaseException,
+    ) -> None:
+        page = event.data
+        if not isinstance(page, GamesPageListed):
+            return
+        ingestion = IngestionRepository(session)
+        for listed in page.games:
+            existing = await ingestion.get_item(
+                page.run_id, listed.metacritic_slug, IngestionStage.cataloged
+            )
+            if existing is not None and existing.status in {
+                IngestionItemStatus.completed,
+                IngestionItemStatus.failed,
+                IngestionItemStatus.degraded,
+            }:
+                continue
+            await ingestion.upsert_item(
+                run_id=page.run_id,
+                metacritic_slug=listed.metacritic_slug,
+                process_date=page.process_date,
+                stage=IngestionStage.cataloged,
+                status=IngestionItemStatus.failed,
+                event_id=event.id,
+                error_type=type(exc).__name__,
+                error_message=sanitize_error_message(str(exc)),
+            )
 
     async def _get_game(self, slug: str) -> GameDetails:
         try:
@@ -170,6 +235,14 @@ class CatalogHandler:
                 stage=self.settings.catalog.stage_name,
                 event="developer_missing",
             )
+
+
+def _failure_from_exc(listed: ListedGame, exc: BaseException) -> _CatalogGameFailure:
+    return _CatalogGameFailure(
+        listed=listed,
+        error_type=type(exc).__name__,
+        error_message=sanitize_error_message(str(exc)),
+    )
 
 
 def _catalog_slice(listed: ListedGame, details: GameDetails, cover_url: str | None) -> CatalogSlice:

@@ -6,6 +6,7 @@ import { Route, Routes } from "react-router";
 import type { GameCard } from "../api/types";
 import { GamePage } from "./game";
 import { jsonResponse, renderWithApp } from "../test/render";
+import { READY_HYDRATION } from "../lib/collection";
 
 const CARD: GameCard = {
   metacritic_slug: "elden-ring",
@@ -29,6 +30,7 @@ const CARD: GameCard = {
     highlights: ["open world"],
   },
   similar: [{ metacritic_slug: "sekiro", title: "Sekiro: Shadows Die Twice", score: 0.87, rank: 1 }],
+  hydration: READY_HYDRATION,
 };
 
 const SEKIRO: GameCard = {
@@ -96,11 +98,12 @@ describe("GamePage", () => {
     );
   });
 
-  it("hides the trailer block when video_url is null", async () => {
+  it("shows an empty video graphic when video_url is null", async () => {
     mockCards({ sekiro: SEKIRO });
     renderGame("/games/sekiro");
     expect(await screen.findByRole("heading", { name: "Sekiro: Shadows Die Twice" })).toBeInTheDocument();
     expect(screen.queryByRole("link", { name: "Watch trailer" })).not.toBeInTheDocument();
+    expect(screen.getByText("No trailer on Metacritic")).toBeInTheDocument();
   });
 
   it("shows card error state", async () => {

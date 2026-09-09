@@ -161,6 +161,18 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** CollectionStateRead */
+        CollectionStateRead: {
+            /** Error Message */
+            error_message?: string | null;
+            /** Error Type */
+            error_type?: string | null;
+            /**
+             * Status
+             * @enum {string}
+             */
+            status: "idle" | "loading" | "empty" | "error" | "ready";
+        };
         /** GameCardRead */
         GameCardRead: {
             /** Cover Url */
@@ -172,6 +184,7 @@ export interface components {
             developer?: string | null;
             /** Genres */
             genres?: string[];
+            hydration: components["schemas"]["GameHydrationRead"];
             letsplay?: components["schemas"]["LetsPlayRead"] | null;
             /** Metacritic Slug */
             metacritic_slug: string;
@@ -189,8 +202,17 @@ export interface components {
             /** Video Url */
             video_url?: string | null;
         };
+        /** GameHydrationRead */
+        GameHydrationRead: {
+            catalog: components["schemas"]["CollectionStateRead"];
+            critic: components["schemas"]["CollectionStateRead"];
+            letsplay: components["schemas"]["CollectionStateRead"];
+            similar: components["schemas"]["CollectionStateRead"];
+            user: components["schemas"]["CollectionStateRead"];
+        };
         /** GameListItemRead */
         GameListItemRead: {
+            catalog_collection: components["schemas"]["CollectionStateRead"];
             /** Cover Url */
             cover_url?: string | null;
             /** Developer */
