@@ -1,0 +1,16 @@
+[project]
+name = "games-intel-contracts"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "games-intel-settings",
+    "pydantic>=2.9",
+    "pyyaml>=6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/games_intel"]

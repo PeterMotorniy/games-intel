@@ -1,0 +1,27 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "audio_ref": {
+      "minLength": 1,
+      "title": "Audio Ref",
+      "type": "string"
+    },
+    "metacritic_slug": {
+      "minLength": 1,
+      "title": "Metacritic Slug",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "metacritic_slug",
+    "audio_ref"
+  ],
+  "title": "TranscriptionInput",
+  "type": "object"
+}

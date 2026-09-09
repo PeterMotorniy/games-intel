@@ -1,0 +1,38 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "metascore": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Metascore"
+    },
+    "platform_code": {
+      "title": "Platform Code",
+      "type": "string"
+    },
+    "userscore": {
+      "anyOf": [
+        {
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Userscore"
+    }
+  },
+  "required": [
+    "platform_code"
+  ],
+  "title": "PlatformScore",
+  "type": "object"
+}

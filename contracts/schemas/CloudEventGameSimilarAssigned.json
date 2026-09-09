@@ -1,0 +1,147 @@
+{
+  "$defs": {
+    "GameSimilarAssigned": {
+      "additionalProperties": false,
+      "properties": {
+        "items": {
+          "items": {
+            "$ref": "#/$defs/SimilarGameRef"
+          },
+          "title": "Items",
+          "type": "array"
+        },
+        "metacritic_slug": {
+          "title": "Metacritic Slug",
+          "type": "string"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "metacritic_slug",
+        "items"
+      ],
+      "title": "GameSimilarAssigned",
+      "type": "object"
+    },
+    "SimilarGameRef": {
+      "additionalProperties": false,
+      "properties": {
+        "metacritic_slug": {
+          "title": "Metacritic Slug",
+          "type": "string"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metacritic_slug",
+        "title",
+        "score",
+        "rank"
+      ],
+      "title": "SimilarGameRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "data": {
+      "$ref": "#/$defs/GameSimilarAssigned"
+    },
+    "datacontenttype": {
+      "const": "application/json",
+      "default": "application/json",
+      "title": "Datacontenttype",
+      "type": "string"
+    },
+    "dataschema": {
+      "title": "Dataschema",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "idempotencykey": {
+      "minLength": 1,
+      "title": "Idempotencykey",
+      "type": "string"
+    },
+    "runid": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Runid"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "specversion": {
+      "const": "1.0",
+      "title": "Specversion",
+      "type": "string"
+    },
+    "subject": {
+      "title": "Subject",
+      "type": "string"
+    },
+    "time": {
+      "format": "date-time",
+      "title": "Time",
+      "type": "string"
+    },
+    "traceparent": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Traceparent"
+    },
+    "type": {
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "specversion",
+    "id",
+    "source",
+    "type",
+    "time",
+    "dataschema",
+    "subject",
+    "idempotencykey",
+    "data"
+  ],
+  "title": "CloudEvent[GameSimilarAssigned]",
+  "type": "object"
+}

@@ -1,0 +1,193 @@
+asyncapi: 3.0.0
+channels:
+  game_cataloged:
+    address: game.cataloged
+    messages:
+      GameCataloged:
+        $ref: '#/components/messages/GameCataloged'
+  game_letsplay_analyzed:
+    address: game.letsplay.analyzed
+    messages:
+      GameLetsPlayAnalyzed:
+        $ref: '#/components/messages/GameLetsPlayAnalyzed'
+  game_reviews_summarized:
+    address: game.reviews.summarized
+    messages:
+      GameReviewsSummarized:
+        $ref: '#/components/messages/GameReviewsSummarized'
+  game_similar_assigned:
+    address: game.similar.assigned
+    messages:
+      GameSimilarAssigned:
+        $ref: '#/components/messages/GameSimilarAssigned'
+  games_page_listed:
+    address: games.page.listed
+    messages:
+      GamesPageListed:
+        $ref: '#/components/messages/GamesPageListed'
+  ingestion_dlq:
+    address: ingestion.dlq
+    messages:
+      DeadLetter:
+        $ref: '#/components/messages/DeadLetter'
+  ingestion_run_requested:
+    address: ingestion.run.requested
+    messages:
+      RunRequested:
+        $ref: '#/components/messages/RunRequested'
+  ingestion_schedule_tick:
+    address: ingestion.schedule.tick
+    messages:
+      ScheduleTick:
+        $ref: '#/components/messages/ScheduleTick'
+  similarity_recompute_requested:
+    address: similarity.recompute.requested
+    messages:
+      SimilarityRecomputeRequested:
+        $ref: '#/components/messages/SimilarityRecomputeRequested'
+  worker_heartbeat:
+    address: worker.heartbeat
+    messages:
+      WorkerHeartbeat:
+        $ref: '#/components/messages/WorkerHeartbeat'
+components:
+  messages:
+    DeadLetter:
+      contentType: application/json
+      name: DeadLetter
+      payload:
+        $ref: ./schemas/CloudEventDeadLetter.json
+    GameCataloged:
+      contentType: application/json
+      name: GameCataloged
+      payload:
+        $ref: ./schemas/CloudEventGameCataloged.json
+    GameLetsPlayAnalyzed:
+      contentType: application/json
+      name: GameLetsPlayAnalyzed
+      payload:
+        $ref: ./schemas/CloudEventGameLetsPlayAnalyzed.json
+    GameReviewsSummarized:
+      contentType: application/json
+      name: GameReviewsSummarized
+      payload:
+        $ref: ./schemas/CloudEventGameReviewsSummarized.json
+    GameSimilarAssigned:
+      contentType: application/json
+      name: GameSimilarAssigned
+      payload:
+        $ref: ./schemas/CloudEventGameSimilarAssigned.json
+    GamesPageListed:
+      contentType: application/json
+      name: GamesPageListed
+      payload:
+        $ref: ./schemas/CloudEventGamesPageListed.json
+    RunRequested:
+      contentType: application/json
+      name: RunRequested
+      payload:
+        $ref: ./schemas/CloudEventRunRequested.json
+    ScheduleTick:
+      contentType: application/json
+      name: ScheduleTick
+      payload:
+        $ref: ./schemas/CloudEventScheduleTick.json
+    SimilarityRecomputeRequested:
+      contentType: application/json
+      name: SimilarityRecomputeRequested
+      payload:
+        $ref: ./schemas/CloudEventSimilarityRecomputeRequested.json
+    WorkerHeartbeat:
+      contentType: application/json
+      name: WorkerHeartbeat
+      payload:
+        $ref: ./schemas/CloudEventWorkerHeartbeat.json
+info:
+  description: Generated from Pydantic CloudEvents contracts. Do not edit by hand.
+  title: Games Intel Events
+  version: 0.1.0
+operations:
+  receive_game_cataloged:
+    action: receive
+    channel:
+      $ref: '#/channels/game_cataloged'
+  receive_game_letsplay_analyzed:
+    action: receive
+    channel:
+      $ref: '#/channels/game_letsplay_analyzed'
+  receive_game_reviews_summarized:
+    action: receive
+    channel:
+      $ref: '#/channels/game_reviews_summarized'
+  receive_game_similar_assigned:
+    action: receive
+    channel:
+      $ref: '#/channels/game_similar_assigned'
+  receive_games_page_listed:
+    action: receive
+    channel:
+      $ref: '#/channels/games_page_listed'
+  receive_ingestion_dlq:
+    action: receive
+    channel:
+      $ref: '#/channels/ingestion_dlq'
+  receive_ingestion_run_requested:
+    action: receive
+    channel:
+      $ref: '#/channels/ingestion_run_requested'
+  receive_ingestion_schedule_tick:
+    action: receive
+    channel:
+      $ref: '#/channels/ingestion_schedule_tick'
+  receive_similarity_recompute_requested:
+    action: receive
+    channel:
+      $ref: '#/channels/similarity_recompute_requested'
+  receive_worker_heartbeat:
+    action: receive
+    channel:
+      $ref: '#/channels/worker_heartbeat'
+  send_game_cataloged:
+    action: send
+    channel:
+      $ref: '#/channels/game_cataloged'
+  send_game_letsplay_analyzed:
+    action: send
+    channel:
+      $ref: '#/channels/game_letsplay_analyzed'
+  send_game_reviews_summarized:
+    action: send
+    channel:
+      $ref: '#/channels/game_reviews_summarized'
+  send_game_similar_assigned:
+    action: send
+    channel:
+      $ref: '#/channels/game_similar_assigned'
+  send_games_page_listed:
+    action: send
+    channel:
+      $ref: '#/channels/games_page_listed'
+  send_ingestion_dlq:
+    action: send
+    channel:
+      $ref: '#/channels/ingestion_dlq'
+  send_ingestion_run_requested:
+    action: send
+    channel:
+      $ref: '#/channels/ingestion_run_requested'
+  send_ingestion_schedule_tick:
+    action: send
+    channel:
+      $ref: '#/channels/ingestion_schedule_tick'
+  send_similarity_recompute_requested:
+    action: send
+    channel:
+      $ref: '#/channels/similarity_recompute_requested'
+  send_worker_heartbeat:
+    action: send
+    channel:
+      $ref: '#/channels/worker_heartbeat'
+servers:
+  kafka:
+    host: localhost:9092
+    protocol: kafka

@@ -1,0 +1,68 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "candidate_slugs": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Candidate Slugs",
+      "type": "array"
+    },
+    "center_slug": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Center Slug"
+    },
+    "process_date": {
+      "format": "date",
+      "title": "Process Date",
+      "type": "string"
+    },
+    "reason": {
+      "enum": [
+        "cataloged",
+        "reviews",
+        "schedule",
+        "manual"
+      ],
+      "title": "Reason",
+      "type": "string"
+    },
+    "run_id": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Run Id"
+    },
+    "scope": {
+      "enum": [
+        "game",
+        "neighbors",
+        "all"
+      ],
+      "title": "Scope",
+      "type": "string"
+    }
+  },
+  "required": [
+    "process_date",
+    "scope",
+    "reason"
+  ],
+  "title": "SimilarityRecomputeRequested",
+  "type": "object"
+}

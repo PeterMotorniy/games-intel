@@ -1,0 +1,31 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "metacritic_slug": {
+      "minLength": 1,
+      "title": "Metacritic Slug",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "transcript_excerpt": {
+      "title": "Transcript Excerpt",
+      "type": "string"
+    },
+    "video_title": {
+      "title": "Video Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "metacritic_slug",
+    "video_title",
+    "transcript_excerpt"
+  ],
+  "title": "LetsPlayAnalystInput",
+  "type": "object"
+}

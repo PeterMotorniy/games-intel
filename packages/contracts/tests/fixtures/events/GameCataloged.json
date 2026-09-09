@@ -1,0 +1,29 @@
+{
+  "cover_source_url": "https://static.metacritic.com/elden-ring.jpg",
+  "cover_url": "/api/v1/media/covers/elden-ring",
+  "description": "Open-world action RPG.",
+  "developer": "FromSoftware",
+  "genres": [
+    "action",
+    "rpg"
+  ],
+  "metacritic_slug": "elden-ring",
+  "platforms": [
+    {
+      "metascore": 96,
+      "platform_code": "ps5",
+      "userscore": 7.8
+    },
+    {
+      "metascore": 94,
+      "platform_code": "pc",
+      "userscore": null
+    }
+  ],
+  "publisher": "Bandai Namco",
+  "process_date": "2026-09-07",
+  "release_date": "2022-02-25",
+  "run_id": "0191c0aa-7e3b-7000-8000-000000000001",
+  "title": "Elden Ring",
+  "video_url": "https://www.youtube.com/watch?v=example"
+}

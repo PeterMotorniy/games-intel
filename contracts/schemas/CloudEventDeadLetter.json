@@ -1,0 +1,133 @@
+{
+  "$defs": {
+    "DeadLetter": {
+      "additionalProperties": false,
+      "properties": {
+        "error_message": {
+          "title": "Error Message",
+          "type": "string"
+        },
+        "error_type": {
+          "title": "Error Type",
+          "type": "string"
+        },
+        "original_id": {
+          "title": "Original Id",
+          "type": "string"
+        },
+        "original_topic": {
+          "title": "Original Topic",
+          "type": "string"
+        },
+        "payload_truncated": {
+          "title": "Payload Truncated",
+          "type": "boolean"
+        },
+        "reason": {
+          "enum": [
+            "schema",
+            "handler",
+            "timeout"
+          ],
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "original_topic",
+        "original_id",
+        "reason",
+        "error_type",
+        "error_message",
+        "payload_truncated"
+      ],
+      "title": "DeadLetter",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "data": {
+      "$ref": "#/$defs/DeadLetter"
+    },
+    "datacontenttype": {
+      "const": "application/json",
+      "default": "application/json",
+      "title": "Datacontenttype",
+      "type": "string"
+    },
+    "dataschema": {
+      "title": "Dataschema",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "idempotencykey": {
+      "minLength": 1,
+      "title": "Idempotencykey",
+      "type": "string"
+    },
+    "runid": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Runid"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "specversion": {
+      "const": "1.0",
+      "title": "Specversion",
+      "type": "string"
+    },
+    "subject": {
+      "title": "Subject",
+      "type": "string"
+    },
+    "time": {
+      "format": "date-time",
+      "title": "Time",
+      "type": "string"
+    },
+    "traceparent": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Traceparent"
+    },
+    "type": {
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "specversion",
+    "id",
+    "source",
+    "type",
+    "time",
+    "dataschema",
+    "subject",
+    "idempotencykey",
+    "data"
+  ],
+  "title": "CloudEvent[DeadLetter]",
+  "type": "object"
+}

@@ -1,0 +1,349 @@
+
+# Epic Workflow Management
+
+## AI Context Header
+**When To Use**: Load when creating task hierarchies (Initiative→Epic→Phase→Step), managing workflow structure, delegating tasks, or tracking epic progress. Essential for any workflow organization or task creation activities.
+
+**Sample Queries**:
+1. "Create a new epic for user authentication with OAuth integration phases"
+2. "How should I structure the requirements for a multi-phase data migration initiative?"
+3. "What's the proper way to delegate a step-level task with clear acceptance criteria?"
+
+## Framework Navigation
+- **User Rules**: [user-rules-template.mdc](./user-rules-template.mdc) - Main navigation and conditional loading guide
+- **Problem Solving**: [problem-solving-framework.mdc](./problem-solving-framework.mdc) - Systematic troubleshooting approach
+- **Execution Standards**: [general-execution-standards.mdc](./general-execution-standards.mdc) - Quality and decision-making protocols
+- **Architecture Lifecycle**: [architecture-lifecycle.mdc](./architecture-lifecycle.mdc) - Architecture documentation management
+- **Architecture Design**: [architecture-design-process.mdc](./architecture-design-process.mdc) - Design methodology and templates
+
+## MANDATORY SEQUENCE
+Plan → Document → Execute → Track → Validate
+
+## 1. Task Hierarchy Structure
+- **Initiative** → **Epic** → **Phase** → **Step** (smallest actionable unit)
+- Sequential numbering required (1, 2, 3, etc.)
+- Each level must reference its parent task in all documentation
+
+## 2. Directory Structure and Naming
+
+### Folder Naming Convention
+```
+/.epic-workflows/tasks/[TASK_TYPE]_[NUMBER]_[TASK_NAME]/
+```
+
+### Hierarchical Structure
+- **Initiative**  
+  `/.epic-workflows/tasks/Initiative_[NUMBER]_[TASK_NAME]/`
+- **Epic**  
+  `/.epic-workflows/tasks/Initiative_[NUMBER]_[INITIATIVE_NAME]/Epic_[NUMBER]_[TASK_NAME]/`
+- **Phase**  
+  `/.epic-workflows/tasks/Initiative_[NUMBER]_[INITIATIVE_NAME]/Epic_[NUMBER]_[EPIC_NAME]/Phase_[NUMBER]_[TASK_NAME]/`
+- **Step**  
+  `/.epic-workflows/tasks/Initiative_[NUMBER]_[INITIATIVE_NAME]/Epic_[NUMBER]_[EPIC_NAME]/Phase_[NUMBER]_[PHASE_NAME]/Step_[NUMBER]_[TASK_NAME]/`
+
+#### Naming Rules
+- **[TASK_TYPE]**: Initiative, Epic, Phase, Step
+- **[TASK_NAME]**: Short, descriptive (max 5 words)
+- **[NUMBER]**: Sequential ordering (1, 2, 3 …)
+- Parent names (`[INITIATIVE_NAME]`, `[EPIC_NAME]`, `[PHASE_NAME]`) are the short names of their respective parent tasks
+
+### Example Structure
+```
+.epic-workflows/
+└── tasks/
+    └── Initiative_1_user-auth-system/
+        ├── INDEX.md
+        ├── REQUIREMENTS.md
+        ├── Epic_1_oauth-integration/
+        │   ├── INDEX.md
+        │   ├── REQUIREMENTS.md
+        │   ├── Phase_1_google-oauth-setup/
+        │   │   ├── INDEX.md
+        │   │   ├── REQUIREMENTS.md
+        │   │   ├── Step_1_install-passport-google/
+        │   │   │   ├── INDEX.md
+        │   │   │   └── REQUIREMENTS.md
+        │   │   └── Step_2_configure-oauth-routes/
+        │   │       ├── INDEX.md
+        │   │       └── REQUIREMENTS.md
+        │   └── Phase_2_token-validation/
+        │       ├── INDEX.md
+        │       └── REQUIREMENTS.md
+        └── Epic_2_user-profile-management/
+            ├── INDEX.md
+            └── REQUIREMENTS.md
+```
+
+## 3. Pre-Execution Requirements
+
+### Mandatory Task Creation Requirements
+- Generate the entire folder hierarchy in `/.epic-workflows/tasks/` *before* work starts
+- Every task directory **must** contain `INDEX.md` and `REQUIREMENTS.md`
+
+### Mandatory Goal Definition Requirements
+**CRITICAL**: Every task at every level (Initiative, Epic, Phase, Step) **MUST** have clearly defined:
+
+#### Business/Product Goal Requirements
+- **Primary Business Objective**: Clear, measurable business value statement
+- **Business Impact**: Quantifiable impact on business metrics (revenue, user engagement, efficiency, etc.)
+- **User Value**: Direct benefit delivered to end users
+- **Success Metrics**: Specific, measurable outcomes that define success
+- **Parent Alignment**: Explicit explanation of how this goal supports parent task's business objective
+
+#### Technical Goal Requirements  
+- **Primary Technical Objective**: Clear, specific technical outcome statement
+- **Technical Impact**: Measurable improvement to system (performance, security, maintainability, scalability)
+- **Implementation Scope**: Clear boundaries of what will be built/modified
+- **Quality Standards**: Specific performance, security, reliability requirements
+- **Parent Alignment**: Explicit explanation of how this goal supports parent task's technical objective
+
+### Goal Validation Protocol
+**AI Agent MUST validate goals before task creation:**
+
+1. **Business Goal Validation**
+   - [ ] Primary business objective is clear and measurable
+   - [ ] Business impact is quantifiable
+   - [ ] User value is explicitly defined
+   - [ ] Success metrics are specific and measurable
+   - [ ] Parent alignment is clearly explained
+
+2. **Technical Goal Validation**
+   - [ ] Primary technical objective is clear and specific
+   - [ ] Technical impact is measurable
+   - [ ] Implementation scope has clear boundaries
+   - [ ] Quality standards are specific
+   - [ ] Parent alignment is clearly explained
+
+3. **Hierarchy Validation**
+   - [ ] Task supports parent's business objective
+   - [ ] Task supports parent's technical objective
+   - [ ] Task is at appropriate level in hierarchy
+   - [ ] Task has clear dependencies identified
+
+## 4. Required Documentation Templates
+
+### INDEX.md Template
+```markdown
+# [Task Name] - Index
+
+## Overview
+Brief description of the task and its objectives.
+
+## Status
+- [ ] Not Started
+- [ ] In Progress
+- [ ] Completed
+- [ ] Blocked
+
+## Dependencies
+List any dependencies or prerequisites.
+
+## Deliverables
+List expected outputs and deliverables.
+
+## Notes
+Additional context and information.
+```
+
+### REQUIREMENTS.md Template
+```markdown
+# [Task Name] - Requirements
+
+## Functional Requirements
+- [Requirement 1]
+- [Requirement 2]
+
+## Technical Requirements
+- [Technical requirement 1]
+- [Technical requirement 2]
+
+## Acceptance Criteria
+- [Criterion 1]
+- [Criterion 2]
+
+## Constraints
+- [Constraint 1]
+- [Constraint 2]
+```
+
+## 5. Task Execution Flow
+
+### Step 1: Planning
+1. **Goal Definition**: Define business and technical goals
+2. **Scope Definition**: Define implementation scope and boundaries
+3. **Dependency Analysis**: Identify and document dependencies
+4. **Resource Planning**: Plan required resources and timeline
+
+### Step 2: Documentation
+1. **Create INDEX.md**: Document task overview and status
+2. **Create REQUIREMENTS.md**: Document functional and technical requirements
+3. **Update Parent Documentation**: Update parent task documentation with child task references
+4. **Validate Documentation**: Ensure all required sections are complete
+
+### Step 3: Execution
+1. **Implementation**: Execute the task according to requirements
+2. **Progress Tracking**: Update INDEX.md with current status
+3. **Issue Management**: Document and address any issues or blockers
+4. **Quality Assurance**: Ensure implementation meets quality standards
+
+### Step 4: Tracking
+1. **Status Updates**: Regularly update task status in INDEX.md
+2. **Progress Documentation**: Document progress and milestones
+3. **Issue Tracking**: Track and resolve any issues or blockers
+4. **Dependency Management**: Monitor and manage dependencies
+
+### Step 5: Validation
+1. **Acceptance Testing**: Verify all acceptance criteria are met
+2. **Quality Validation**: Ensure implementation meets quality standards
+3. **Documentation Review**: Review and update all documentation
+4. **Parent Task Update**: Update parent task with completion status
+
+## 6. Delegation Instructions
+
+### When Delegating Tasks
+1. **Clear Objectives**: Provide clear business and technical objectives
+2. **Scope Definition**: Define clear scope and boundaries
+3. **Acceptance Criteria**: Define specific acceptance criteria
+4. **Dependencies**: Identify and document dependencies
+5. **Timeline**: Provide clear timeline and milestones
+6. **Resources**: Ensure required resources are available
+
+### Delegation Template
+```markdown
+## Delegated Task: [Task Name]
+
+### Objectives
+- **Business Objective**: [Clear business value statement]
+- **Technical Objective**: [Clear technical outcome statement]
+
+### Scope
+- **In Scope**: [What is included]
+- **Out of Scope**: [What is not included]
+
+### Acceptance Criteria
+- [ ] [Criterion 1]
+- [ ] [Criterion 2]
+- [ ] [Criterion 3]
+
+### Dependencies
+- [Dependency 1]
+- [Dependency 2]
+
+### Timeline
+- **Start Date**: [Date]
+- **Due Date**: [Date]
+- **Milestones**: [Key milestones]
+
+### Resources
+- [Resource 1]
+- [Resource 2]
+```
+
+## 7. Progress Tracking
+
+### Status Definitions
+- **Not Started**: Task has been created but work has not begun
+- **In Progress**: Work has begun on the task
+- **Completed**: Task has been completed and validated
+- **Blocked**: Task is blocked by dependencies or issues
+
+### Progress Updates
+1. **Regular Updates**: Update status regularly (at least weekly)
+2. **Milestone Tracking**: Track and document key milestones
+3. **Issue Documentation**: Document any issues or blockers
+4. **Dependency Status**: Monitor dependency status and updates
+
+### Progress Reporting
+```markdown
+## Progress Report: [Task Name]
+
+### Current Status
+- **Status**: [Not Started/In Progress/Completed/Blocked]
+- **Progress**: [Percentage complete]
+- **Last Updated**: [Date]
+
+### Recent Progress
+- [Progress item 1]
+- [Progress item 2]
+
+### Issues/Blockers
+- [Issue 1]
+- [Issue 2]
+
+### Next Steps
+- [Next step 1]
+- [Next step 2]
+```
+
+## 8. Quality Assurance
+
+### Quality Standards
+1. **Documentation Quality**: All documentation must be complete and accurate
+2. **Implementation Quality**: Implementation must meet technical requirements
+3. **Testing Quality**: All acceptance criteria must be validated
+4. **Integration Quality**: Integration with parent tasks must be verified
+
+### Quality Validation Checklist
+- [ ] All required documentation is complete
+- [ ] Implementation meets technical requirements
+- [ ] All acceptance criteria are met
+- [ ] Integration with parent tasks is verified
+- [ ] Quality standards are maintained
+- [ ] No critical issues remain unresolved
+
+## 9. Integration with Other Framework Components
+
+### Problem Solving Framework Integration
+- Use systematic problem-solving approach for any issues or blockers
+- Document problem-solving process in task documentation
+- Apply research-first methodology for technical decisions
+
+### Architecture Design Process Integration
+- Use architecture design process for system design decisions
+- Document architecture decisions in task documentation
+- Apply quality attribute analysis for technical trade-offs
+
+### Execution Standards Integration
+- Follow execution standards for all task activities
+- Apply file navigation and verification procedures
+- Use appropriate tools and methodologies
+
+## 10. Success Metrics
+
+### Task Success Metrics
+- **Completion Rate**: Percentage of tasks completed on time
+- **Quality Rate**: Percentage of tasks meeting quality standards
+- **Documentation Rate**: Percentage of tasks with complete documentation
+- **Integration Rate**: Percentage of tasks properly integrated with parent tasks
+
+### Framework Success Metrics
+- **Efficiency**: Reduced time to complete complex projects
+- **Quality**: Improved quality of deliverables
+- **Consistency**: Consistent approach across all tasks
+- **Scalability**: Framework scales with project complexity
+
+## 11. Best Practices
+
+### Task Creation Best Practices
+1. **Start with Goals**: Always define clear business and technical goals
+2. **Plan Before Acting**: Complete planning phase before starting implementation
+3. **Document Everything**: Maintain complete documentation throughout
+4. **Track Progress**: Regularly update progress and status
+5. **Validate Quality**: Ensure quality standards are maintained
+
+### Communication Best Practices
+1. **Clear Objectives**: Communicate clear objectives to all stakeholders
+2. **Regular Updates**: Provide regular progress updates
+3. **Issue Escalation**: Escalate issues promptly when needed
+4. **Documentation Sharing**: Share documentation with relevant stakeholders
+
+### Integration Best Practices
+1. **Parent Task Alignment**: Ensure alignment with parent task objectives
+2. **Dependency Management**: Proactively manage dependencies
+3. **Quality Integration**: Ensure quality integration with existing systems
+4. **Continuous Improvement**: Continuously improve processes and procedures
+
+This epic workflow management system provides a comprehensive framework for organizing and executing complex projects through systematic task breakdown, clear documentation, and structured execution processes.
+
+### Navigation and Usage
+- **[user-rules-template.md](./user-rules-template.md)** - Main navigation guide for accessing this and other framework documentation conditionally

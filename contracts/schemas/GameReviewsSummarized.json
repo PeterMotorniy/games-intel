@@ -1,0 +1,77 @@
+{
+  "$defs": {
+    "ReviewSummary": {
+      "additionalProperties": false,
+      "properties": {
+        "dislikes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Dislikes",
+          "type": "array"
+        },
+        "likes": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Likes",
+          "type": "array"
+        },
+        "summary": {
+          "title": "Summary",
+          "type": "string"
+        }
+      },
+      "required": [
+        "likes",
+        "dislikes",
+        "summary"
+      ],
+      "title": "ReviewSummary",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "critic": {
+      "$ref": "#/$defs/ReviewSummary"
+    },
+    "critic_review_count": {
+      "minimum": 0,
+      "title": "Critic Review Count",
+      "type": "integer"
+    },
+    "degraded": {
+      "title": "Degraded",
+      "type": "boolean"
+    },
+    "metacritic_slug": {
+      "title": "Metacritic Slug",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "user": {
+      "$ref": "#/$defs/ReviewSummary"
+    },
+    "user_review_count": {
+      "minimum": 0,
+      "title": "User Review Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "run_id",
+    "metacritic_slug",
+    "critic",
+    "user",
+    "critic_review_count",
+    "user_review_count",
+    "degraded"
+  ],
+  "title": "GameReviewsSummarized",
+  "type": "object"
+}

@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "process_date": {
+      "format": "date",
+      "title": "Process Date",
+      "type": "string"
+    },
+    "requested_at": {
+      "format": "date-time",
+      "title": "Requested At",
+      "type": "string"
+    },
+    "trigger": {
+      "enum": [
+        "cron",
+        "manual"
+      ],
+      "title": "Trigger",
+      "type": "string"
+    }
+  },
+  "required": [
+    "trigger",
+    "requested_at",
+    "process_date"
+  ],
+  "title": "ScheduleTick",
+  "type": "object"
+}

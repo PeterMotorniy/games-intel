@@ -1,0 +1,57 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "limit": {
+      "default": 20,
+      "minimum": 1,
+      "title": "Limit",
+      "type": "integer"
+    },
+    "page": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Page"
+    },
+    "process_date": {
+      "format": "date",
+      "title": "Process Date",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "source": {
+      "enum": [
+        "new_releases",
+        "browse"
+      ],
+      "title": "Source",
+      "type": "string"
+    },
+    "trigger": {
+      "enum": [
+        "cron",
+        "manual"
+      ],
+      "title": "Trigger",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "process_date",
+    "source",
+    "trigger"
+  ],
+  "title": "RunRequested",
+  "type": "object"
+}

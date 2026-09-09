@@ -1,0 +1,44 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Virtualenvs
+.venv/
+venv/
+env/
+
+# Secrets and local config
+.env
+config.yaml
+config.local.yaml
+
+# Media volume
+media/
+*.jpg
+*.jpeg
+*.png
+*.webp
+
+# Node / frontend
+node_modules/
+apps/web/dist/
+apps/web/coverage/
+
+# Editors / OS
+.idea/
+.vscode/
+*.swp
+Thumbs.db
+Desktop.ini

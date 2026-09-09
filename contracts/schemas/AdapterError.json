@@ -1,0 +1,29 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "code": {
+      "enum": [
+        "not_found",
+        "timeout",
+        "rate_limited",
+        "parse_error",
+        "quota_exceeded",
+        "unavailable",
+        "circuit_open"
+      ],
+      "title": "Code",
+      "type": "string"
+    },
+    "message": {
+      "minLength": 1,
+      "title": "Message",
+      "type": "string"
+    }
+  },
+  "required": [
+    "code",
+    "message"
+  ],
+  "title": "AdapterError",
+  "type": "object"
+}

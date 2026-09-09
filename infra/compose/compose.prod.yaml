@@ -1,0 +1,41 @@
+# Production overlay: auto_migrate stays false; apps do not apply DDL on start.
+# Migrations remain an explicit `migrate` service from compose.yaml.
+
+x-prod-env: &prod-env
+  GAMES_INTEL__APP__ENV: prod
+  GAMES_INTEL__DATABASE__AUTO_MIGRATE: "false"
+
+services:
+  api:
+    environment:
+      <<: *prod-env
+  scheduler:
+    environment:
+      <<: *prod-env
+  tick:
+    environment:
+      <<: *prod-env
+  discovery:
+    environment:
+      <<: *prod-env
+  catalog:
+    environment:
+      <<: *prod-env
+  catalog-replica:
+    environment:
+      <<: *prod-env
+  reviews:
+    environment:
+      <<: *prod-env
+  letsplay:
+    environment:
+      <<: *prod-env
+  similarity:
+    environment:
+      <<: *prod-env
+  scrape-metacritic:
+    environment:
+      <<: *prod-env
+  migrate:
+    environment:
+      <<: *prod-env

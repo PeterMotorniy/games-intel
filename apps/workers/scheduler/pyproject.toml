@@ -1,0 +1,21 @@
+[project]
+name = "games-intel-scheduler"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "games-intel-contracts",
+    "games-intel-db",
+    "games-intel-kafka",
+    "games-intel-settings",
+]
+
+[project.scripts]
+games-intel-scheduler = "games_intel.workers.scheduler.__main__:main"
+games-intel-tick = "games_intel.workers.scheduler.external_tick:main"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/games_intel"]

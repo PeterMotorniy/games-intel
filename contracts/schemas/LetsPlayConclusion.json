@@ -1,0 +1,21 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "conclusion": {
+      "title": "Conclusion",
+      "type": "string"
+    },
+    "highlights": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Highlights",
+      "type": "array"
+    }
+  },
+  "required": [
+    "conclusion"
+  ],
+  "title": "LetsPlayConclusion",
+  "type": "object"
+}

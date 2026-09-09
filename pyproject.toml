@@ -1,0 +1,183 @@
+[project]
+name = "games-intel"
+version = "0.1.0"
+description = "Metacritic Games Intelligence workspace"
+requires-python = ">=3.12"
+dependencies = [
+    "games-intel-settings",
+    "games-intel-contracts",
+    "games-intel-api",
+    "games-intel-scheduler",
+    "games-intel-discovery",
+    "games-intel-catalog",
+    "games-intel-reviews",
+    "games-intel-letsplay",
+    "games-intel-similarity",
+    "games-intel-scrape-metacritic",
+    "games-intel-db",
+    "games-intel-kafka",
+    "games-intel-adapters-metacritic",
+    "games-intel-adapters-youtube",
+    "games-intel-adapters-media",
+    "games-intel-adapters-stt",
+    "games-intel-adapters-embeddings",
+    "games-intel-agents-review-summarizer",
+    "games-intel-agents-transcription",
+    "games-intel-agents-letsplay-analyst",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.13",
+    "pytest>=8",
+    "pytest-asyncio>=0.24",
+    "ruff>=0.8",
+    "testcontainers>=4.8",
+    "types-beautifulsoup4>=4.12",
+    "types-pyyaml>=6",
+]
+
+[tool.uv]
+package = false
+
+[tool.uv.workspace]
+members = [
+    "apps/api",
+    "apps/workers/scheduler",
+    "apps/workers/discovery",
+    "apps/workers/catalog",
+    "apps/workers/reviews",
+    "apps/workers/letsplay",
+    "apps/workers/similarity",
+    "apps/scrape/metacritic",
+    "packages/settings",
+    "packages/contracts",
+    "packages/db",
+    "packages/kafka",
+    "packages/adapters/metacritic",
+    "packages/adapters/youtube",
+    "packages/adapters/media",
+    "packages/adapters/stt",
+    "packages/adapters/embeddings",
+    "packages/agents/review_summarizer",
+    "packages/agents/transcription",
+    "packages/agents/letsplay_analyst",
+]
+
+[tool.uv.sources]
+games-intel-settings = { workspace = true }
+games-intel-contracts = { workspace = true }
+games-intel-api = { workspace = true }
+games-intel-scheduler = { workspace = true }
+games-intel-discovery = { workspace = true }
+games-intel-catalog = { workspace = true }
+games-intel-reviews = { workspace = true }
+games-intel-letsplay = { workspace = true }
+games-intel-similarity = { workspace = true }
+games-intel-scrape-metacritic = { workspace = true }
+games-intel-db = { workspace = true }
+games-intel-kafka = { workspace = true }
+games-intel-adapters-metacritic = { workspace = true }
+games-intel-adapters-youtube = { workspace = true }
+games-intel-adapters-media = { workspace = true }
+games-intel-adapters-stt = { workspace = true }
+games-intel-adapters-embeddings = { workspace = true }
+games-intel-agents-review-summarizer = { workspace = true }
+games-intel-agents-transcription = { workspace = true }
+games-intel-agents-letsplay-analyst = { workspace = true }
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["packages", "apps"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["games_intel"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+namespace_packages = true
+explicit_package_bases = true
+mypy_path = [
+    "apps/api/src",
+    "apps/workers/scheduler/src",
+    "apps/workers/discovery/src",
+    "apps/workers/catalog/src",
+    "apps/workers/reviews/src",
+    "apps/workers/letsplay/src",
+    "apps/workers/similarity/src",
+    "apps/scrape/metacritic/src",
+    "packages/settings/src",
+    "packages/contracts/src",
+    "packages/db/src",
+    "packages/kafka/src",
+    "packages/adapters/metacritic/src",
+    "packages/adapters/youtube/src",
+    "packages/adapters/media/src",
+    "packages/adapters/stt/src",
+    "packages/adapters/embeddings/src",
+    "packages/agents/review_summarizer/src",
+    "packages/agents/transcription/src",
+    "packages/agents/letsplay_analyst/src",
+]
+files = [
+    "packages/settings/src",
+    "packages/contracts/src",
+    "packages/settings/tests",
+    "packages/contracts/tests",
+    "apps",
+    "packages/db/src",
+    "packages/db/tests",
+    "packages/kafka/src",
+    "packages/kafka/tests",
+    "packages/adapters",
+    "packages/agents",
+]
+
+[tool.pytest.ini_options]
+testpaths = [
+    "packages/settings/tests",
+    "packages/contracts/tests",
+    "packages/db/tests",
+    "packages/kafka/tests",
+    "packages/adapters/metacritic/tests",
+    "apps/scrape/metacritic/tests",
+    "apps/workers/scheduler/tests",
+    "apps/workers/discovery/tests",
+    "apps/workers/catalog/tests",
+    "apps/workers/reviews/tests",
+    "apps/api/tests",
+    "apps/workers/similarity/tests",
+    "packages/adapters/media/tests",
+    "packages/adapters/embeddings/tests",
+    "packages/adapters/youtube/tests",
+    "packages/adapters/stt/tests",
+    "packages/agents/review_summarizer/tests",
+    "packages/agents/transcription/tests",
+    "packages/agents/letsplay_analyst/tests",
+    "apps/workers/letsplay/tests",
+]
+addopts = "-q"
+pythonpath = []
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+
+[[tool.mypy.overrides]]
+module = ["aiokafka", "aiokafka.*"]
+ignore_missing_imports = true
+
+[[tool.mypy.overrides]]
+module = [
+    "youtube_transcript_api",
+    "youtube_transcript_api.*",
+    "yt_dlp",
+    "yt_dlp.*",
+]
+ignore_missing_imports = true

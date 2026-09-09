@@ -1,0 +1,263 @@
+app:
+  name: games-intel
+  env: local
+  log_level: INFO
+  process_timezone: UTC
+  http_timeout_seconds: 30
+
+kafka:
+  bootstrap_servers: localhost:9092
+  client_id: "{app.name}-{worker.type}-{instance_id}"
+  security_protocol: SASL_PLAINTEXT
+  sasl_mechanism: PLAIN
+  sasl_username: kafka
+  sasl_password: ""
+  partitions:
+    game_events: 6
+    control: 3
+  replication_factor: 1
+  retention_hours: 168
+  enable_auto_commit: false
+  max_poll_records: 10
+  max_poll_interval_ms: 600000
+  session_timeout_ms: 45000
+  events:
+    schedule_tick: ingestion.schedule.tick
+    run_requested: ingestion.run.requested
+    page_listed: games.page.listed
+    game_cataloged: game.cataloged
+    game_reviews_summarized: game.reviews.summarized
+    game_letsplay_analyzed: game.letsplay.analyzed
+    game_similar_assigned: game.similar.assigned
+    similarity_recompute: similarity.recompute.requested
+    worker_heartbeat: worker.heartbeat
+    dlq: ingestion.dlq
+  consumer_groups:
+    scheduler: games-intel.scheduler
+    discovery: games-intel.discovery
+    catalog: games-intel.catalog
+    reviews: games-intel.reviews
+    letsplay: games-intel.letsplay
+    similarity: games-intel.similarity
+  topic_prefix: ""
+
+idempotency:
+  key_template: "{event_type}:{run_id}:{subject}:{stage}"
+  enable_event_id_unique: true
+  enable_business_key_unique: true
+
+scheduler:
+  tick_source: external
+  tick_cron: "0 * * * *"
+  tick_interval_seconds: 3600
+  tick_use_interval: false
+  advisory_lock_key: 742001
+  tick_dedup_window_seconds: 300
+  default_limit: 20
+  new_releases_source: new_releases
+  browse_source: browse
+  enabled: true
+  consumer_group: scheduler
+  subscribe_event: schedule_tick
+  publish_event: run_requested
+  stage_name: scheduled
+  heartbeat_interval_seconds: 10
+  instance_id: ""
+  lease_seconds: 120
+
+discovery:
+  enabled: true
+  consumer_group: discovery
+  subscribe_event: run_requested
+  publish_event: page_listed
+  stage_name: discovered
+  heartbeat_interval_seconds: 10
+  instance_id: ""
+  lease_seconds: 120
+  list_limit: 20
+  browse_list_limit: 48
+
+catalog:
+  enabled: true
+  consumer_group: catalog
+  subscribe_event: page_listed
+  publish_event: game_cataloged
+  stage_name: cataloged
+  heartbeat_interval_seconds: 10
+  instance_id: ""
+  lease_seconds: 120
+  empty_video_ok: true
+
+reviews:
+  enabled: true
+  consumer_group: reviews
+  subscribe_event: game_cataloged
+  publish_event: game_reviews_summarized
+  stage_name: reviews
+  heartbeat_interval_seconds: 10
+  instance_id: ""
+  lease_seconds: 120
+  critic_limit: 50
+  user_limit: 50
+  max_chars: 8000
+  skip_agent_if_empty: true
+
+letsplay:
+  enabled: true
+  consumer_group: letsplay
+  subscribe_event: game_cataloged
+  publish_event: game_letsplay_analyzed
+  stage_name: letsplay
+  heartbeat_interval_seconds: 10
+  instance_id: ""
+  lease_seconds: 120
+  search_max_results: 10
+  stt_enabled: true
+  transcript_max_chars: 4000
+  max_video_duration_seconds: 180
+
+similarity:
+  enabled: true
+  consumer_group: similarity
+  subscribe_event: game_cataloged
+  subscribe_reviews_event: game_reviews_summarized
+  subscribe_recompute_event: similarity_recompute
+  publish_event: game_similar_assigned
+  stage_name: similar
+  heartbeat_interval_seconds: 10
+  instance_id: ""
+  lease_seconds: 120
+  k: 5
+  mode: inline_all
+  inline_all_max_rows: 2000
+  recompute_on_reviews: true
+  w_vector: 0.70
+  w_platform: 0.15
+  w_genre: 0.10
+  w_release: 0.05
+  release_tau_days: 365
+  full_recompute_cron: "15 * * * *"
+  reverse_candidate_limit: 50
+  hnsw_min_rows: 5000
+  emit_assigned_for_all: false
+
+retry:
+  max_attempts: 5
+  backoff_base_seconds: 1
+  backoff_max_seconds: 60
+  jitter_ratio: 0.2
+  llm_structure_retries: 2
+
+database:
+  url: ""
+  pool_size: 5
+  pool_timeout_seconds: 30
+  auto_migrate: false
+
+adapters:
+  metacritic:
+    base_url: https://www.metacritic.com
+    sidecar_base_url: http://scrape-metacritic:8080
+    mode: sidecar
+    timeout_seconds: 30
+    min_delay_ms: 1500
+    user_agent: "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    locale: en-US
+    headless: true
+    pool_size: 1
+    new_releases_path: /game/
+    browse_path: /browse/game/all/all/all-time/new/
+    browse_page_query_param: page
+    cache_ttl_seconds: 3600
+    canary_enabled: true
+    canary_slug: elden-ring
+    circuit_fail_threshold: 3
+    circuit_open_seconds: 600
+    markers:
+      listing_container: "[data-testid='filter-results'], [data-testid='new-game-release-carousel'], [data-testid='dropdown-sort'], .c-pageProductHome, .c-finderSitePage"
+      listing_min_cards: 1
+      listing_section_title: ".c-sectionHeader_title, [data-testid='new-game-release-carousel'] h2, h1"
+      card_container: "[data-testid='product-hero'], .product-hero, .c-productHero"
+      reviews_container: "[data-testid='reviews-filters'], [data-testid='score-card-overview'], [data-testid='review-card'], [data-testid='product-reviews'], [data-testid='critic-reviews'], [data-testid='user-reviews'], .c-pageProductReviews, [data-gi-reviews]"
+    selectors:
+      listing:
+        game_card: "[data-testid='product-card'], .c-productCard, .c-finderProductCard"
+        slug: "a[href*='/game/']"
+        title: "[data-testid='product-card-title'], [data-testid='product-title'], [data-testid='article-card-title'], .c-productCard_title, .c-finderProductCard_title, h3"
+      card:
+        title: "[data-testid='hero-title'], h1.hero-title__text, h1.c-productHero_title, .c-productHero_title h1, h1"
+        cover: "img.c-productHero_image, .c-productHero img, [data-testid='product-hero'] img"
+        developer: ".c-gameDetails_Developer .c-gameDetails_listItem, [data-testid='hero-summary-developer']"
+        publisher: ".c-gameDetails_Distributor .c-gameDetails_listItem, [data-testid='hero-summary-publisher']"
+        description: ".c-productHero_summary, .c-pageProduct_description, [data-testid='hero-summary']"
+        video: "iframe[src*='youtube'], a[href*='youtube.com'], a[href*='youtu.be'], [data-testid='featured-trailer']"
+        platforms: ".c-gamePlatforms_item, [data-testid='product-score-card']"
+        platform_code: ".c-gamePlatforms_name, [data-platform], [title]"
+        metascore: ".c-siteReviewScore, [data-gi-metascore]"
+        userscore: ".c-siteReviewScore_user, [data-gi-userscore]"
+        genres: ".c-gameDetails_Genre .c-gameDetails_listItem, .c-genreList_item"
+        release_date: ".c-gameDetails_ReleaseDate .c-gameDetails_listItem"
+      reviews:
+        critic_item: ".c-siteReview_critic, [data-gi-critic-review], [data-testid='review-card']"
+        user_item: ".c-siteReview_user, [data-gi-user-review], [data-testid='review-card']"
+        body: ".c-siteReview_quote, [data-gi-review-body], [data-testid='review-quote-text']"
+        score: ".c-siteReviewScore, [data-gi-review-score]"
+        author: ".c-siteReview_author, [data-gi-review-author], [data-testid='review-card-header']"
+  youtube:
+    api_key: ""
+    timeout_seconds: 30
+    search_query_template: "{title} let's play"
+    min_duration_seconds: 180
+    max_duration_seconds: 7200
+    exclude_title_patterns:
+      - compilation
+      - "top 10"
+
+media:
+  covers_dir: /data/covers
+  covers_url_prefix: /api/v1/media/covers
+  covers_cache_control: "public, max-age=86400"
+
+stt:
+  enabled: true
+  timeout_seconds: 120
+  model: whisper-1
+  base_url: https://api.openai.com/v1
+  api_key: ""
+
+llm:
+  model: google/gemini-2.5-flash-lite
+  base_url: https://openrouter.ai/api/v1
+  api_key: ""
+  temperature: 0
+  timeout_seconds: 60
+  max_tokens: 512
+
+embeddings:
+  model: openai/text-embedding-3-small
+  base_url: https://openrouter.ai/api/v1
+  api_key: ""
+  vector_dim: 768
+
+prompts:
+  review_summarizer_path: packages/agents/review_summarizer/prompts/prompt.md
+  letsplay_analyst_path: packages/agents/letsplay_analyst/prompts/prompt.md
+
+api:
+  host: 0.0.0.0
+  port: 8000
+  cors_origins:
+    - http://localhost:5173
+  heartbeat_stale_seconds: 30
+  page_size_default: 20
+  page_size_max: 100
+
+web:
+  api_base_url: http://localhost:8000/api/v1
+
+monitor:
+  heartbeat_stale_seconds: 30
+  show_instance_id: true
+  include_scrape_circuit_state: true
+  include_last_parse_error: true
+  sse_poll_seconds: 2.0

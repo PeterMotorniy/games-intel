@@ -1,0 +1,8 @@
+{
+  "limit": 20,
+  "page": null,
+  "process_date": "2026-09-07",
+  "run_id": "0191c0aa-7e3b-7000-8000-000000000001",
+  "source": "new_releases",
+  "trigger": "cron"
+}

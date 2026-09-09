@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "audio_ref": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Audio Ref"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "unavailable"
+      ],
+      "title": "Status",
+      "type": "string"
+    }
+  },
+  "required": [
+    "status"
+  ],
+  "title": "AudioResult",
+  "type": "object"
+}

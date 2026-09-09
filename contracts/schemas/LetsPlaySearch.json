@@ -1,0 +1,69 @@
+{
+  "$defs": {
+    "VideoHit": {
+      "additionalProperties": false,
+      "properties": {
+        "channel_title": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Channel Title"
+        },
+        "duration_seconds": {
+          "minimum": 0,
+          "title": "Duration Seconds",
+          "type": "integer"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Url",
+          "type": "string"
+        },
+        "video_id": {
+          "minLength": 1,
+          "title": "Video Id",
+          "type": "string"
+        },
+        "view_count": {
+          "minimum": 0,
+          "title": "View Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "video_id",
+        "title",
+        "view_count",
+        "duration_seconds",
+        "url"
+      ],
+      "title": "VideoHit",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/VideoHit"
+      },
+      "title": "Items",
+      "type": "array"
+    }
+  },
+  "title": "LetsPlaySearch",
+  "type": "object"
+}

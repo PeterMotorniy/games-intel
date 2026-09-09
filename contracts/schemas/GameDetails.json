@@ -1,0 +1,167 @@
+{
+  "$defs": {
+    "PlatformScore": {
+      "additionalProperties": false,
+      "properties": {
+        "metascore": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metascore"
+        },
+        "platform_code": {
+          "title": "Platform Code",
+          "type": "string"
+        },
+        "userscore": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Userscore"
+        }
+      },
+      "required": [
+        "platform_code"
+      ],
+      "title": "PlatformScore",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "cover_bytes": {
+      "anyOf": [
+        {
+          "format": "base64url",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cover Bytes"
+    },
+    "cover_source_url": {
+      "anyOf": [
+        {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cover Source Url"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "developer": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Developer"
+    },
+    "genres": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Genres",
+      "type": "array"
+    },
+    "platforms": {
+      "items": {
+        "$ref": "#/$defs/PlatformScore"
+      },
+      "title": "Platforms",
+      "type": "array"
+    },
+    "publisher": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Publisher"
+    },
+    "release_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Release Date"
+    },
+    "slug": {
+      "minLength": 1,
+      "title": "Slug",
+      "type": "string"
+    },
+    "title": {
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "video_url": {
+      "anyOf": [
+        {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Video Url"
+    }
+  },
+  "required": [
+    "slug",
+    "title"
+  ],
+  "title": "GameDetails",
+  "type": "object"
+}

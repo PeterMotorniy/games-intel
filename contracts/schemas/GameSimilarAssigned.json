@@ -1,0 +1,60 @@
+{
+  "$defs": {
+    "SimilarGameRef": {
+      "additionalProperties": false,
+      "properties": {
+        "metacritic_slug": {
+          "title": "Metacritic Slug",
+          "type": "string"
+        },
+        "rank": {
+          "minimum": 1,
+          "title": "Rank",
+          "type": "integer"
+        },
+        "score": {
+          "title": "Score",
+          "type": "number"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metacritic_slug",
+        "title",
+        "score",
+        "rank"
+      ],
+      "title": "SimilarGameRef",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/SimilarGameRef"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "metacritic_slug": {
+      "title": "Metacritic Slug",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "metacritic_slug",
+    "items"
+  ],
+  "title": "GameSimilarAssigned",
+  "type": "object"
+}

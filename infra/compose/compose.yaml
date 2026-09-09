@@ -1,0 +1,329 @@
+name: games-intel
+
+x-app-env: &app-env
+  APP_CONFIG_PATH: /app/config.example.yaml
+  GAMES_INTEL__APP__ENV: local
+  GAMES_INTEL__DATABASE__URL: postgresql+asyncpg://games:${POSTGRES_PASSWORD}@postgres:5432/games_intel
+  GAMES_INTEL__DATABASE__AUTO_MIGRATE: "false"
+  GAMES_INTEL__KAFKA__BOOTSTRAP_SERVERS: kafka:29092
+  GAMES_INTEL__KAFKA__SECURITY_PROTOCOL: ${GAMES_INTEL__KAFKA__SECURITY_PROTOCOL:-SASL_PLAINTEXT}
+  GAMES_INTEL__KAFKA__SASL_MECHANISM: ${GAMES_INTEL__KAFKA__SASL_MECHANISM:-PLAIN}
+  GAMES_INTEL__KAFKA__SASL_USERNAME: ${GAMES_INTEL__KAFKA__SASL_USERNAME:-kafka}
+  GAMES_INTEL__KAFKA__SASL_PASSWORD: ${GAMES_INTEL__KAFKA__SASL_PASSWORD:?set GAMES_INTEL__KAFKA__SASL_PASSWORD in .env}
+  GAMES_INTEL__ADAPTERS__METACRITIC__MODE: sidecar
+  GAMES_INTEL__ADAPTERS__METACRITIC__SIDECAR_BASE_URL: http://scrape-metacritic:8080
+  GAMES_INTEL__SCHEDULER__TICK_SOURCE: external
+  GAMES_INTEL__LLM__MODEL: google/gemini-2.5-flash-lite
+  GAMES_INTEL__LLM__BASE_URL: https://openrouter.ai/api/v1
+  GAMES_INTEL__LLM__API_KEY: ${GAMES_INTEL__LLM__API_KEY:-}
+  GAMES_INTEL__LLM__TIMEOUT_SECONDS: "60"
+  GAMES_INTEL__LETSPLAY__TRANSCRIPT_MAX_CHARS: "4000"
+  GAMES_INTEL__EMBEDDINGS__MODEL: openai/text-embedding-3-small
+  GAMES_INTEL__EMBEDDINGS__BASE_URL: https://openrouter.ai/api/v1
+  GAMES_INTEL__EMBEDDINGS__VECTOR_DIM: "768"
+  GAMES_INTEL__STT__MODEL: whisper-1
+  GAMES_INTEL__STT__API_KEY: ${GAMES_INTEL__STT__API_KEY:-}
+  GAMES_INTEL__ADAPTERS__YOUTUBE__API_KEY: ${GAMES_INTEL__ADAPTERS__YOUTUBE__API_KEY:-}
+
+x-infra-deps: &infra-deps
+  postgres:
+    condition: service_healthy
+  kafka:
+    condition: service_healthy
+  migrate:
+    condition: service_completed_successfully
+  kafka-init:
+    condition: service_completed_successfully
+
+x-worker: &worker-common
+  init: true
+  restart: unless-stopped
+  env_file:
+    - path: ../../.env
+      required: false
+  environment:
+    <<: *app-env
+  depends_on:
+    <<: *infra-deps
+    scrape-metacritic:
+      condition: service_healthy
+  volumes:
+    - covers:/data/covers
+
+x-daemon-build: &daemon-build
+  context: ../..
+  dockerfile: infra/compose/Dockerfile.app
+  args:
+    PACKAGE: games-intel-catalog
+    EXPECT_LANGCHAIN: "0"
+
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: games
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in .env}
+      POSTGRES_HOST_AUTH_METHOD: ${POSTGRES_HOST_AUTH_METHOD:-scram-sha-256}
+      POSTGRES_DB: games_intel
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U games -d games_intel"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  kafka:
+    image: apache/kafka:3.8.1
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+    volumes:
+      - kafka_data:/tmp/kraft-combined-logs
+      - ./kafka-healthcheck.sh:/kafka-healthcheck.sh:ro
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:19092,BROKER://0.0.0.0:29092,HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:19092,BROKER://kafka:29092,HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,INTERNAL:PLAINTEXT,BROKER:SASL_PLAINTEXT,HOST:SASL_PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      CLUSTER_ID: 5L6g3nShT-eMCtK--X86sw
+      KAFKA_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_LISTENER_NAME_BROKER_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_LISTENER_NAME_HOST_SASL_ENABLED_MECHANISMS: PLAIN
+      KAFKA_LISTENER_NAME_BROKER_PLAIN_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="${GAMES_INTEL__KAFKA__SASL_USERNAME:-kafka}" password="${GAMES_INTEL__KAFKA__SASL_PASSWORD}" user_${GAMES_INTEL__KAFKA__SASL_USERNAME:-kafka}="${GAMES_INTEL__KAFKA__SASL_PASSWORD}";
+      KAFKA_LISTENER_NAME_HOST_PLAIN_SASL_JAAS_CONFIG: org.apache.kafka.common.security.plain.PlainLoginModule required username="${GAMES_INTEL__KAFKA__SASL_USERNAME:-kafka}" password="${GAMES_INTEL__KAFKA__SASL_PASSWORD}" user_${GAMES_INTEL__KAFKA__SASL_USERNAME:-kafka}="${GAMES_INTEL__KAFKA__SASL_PASSWORD}";
+      KAFKA_CLIENT_USER: ${GAMES_INTEL__KAFKA__SASL_USERNAME:-kafka}
+      KAFKA_CLIENT_PASSWORD: ${GAMES_INTEL__KAFKA__SASL_PASSWORD:?set GAMES_INTEL__KAFKA__SASL_PASSWORD in .env}
+    healthcheck:
+      test: ["CMD-SHELL", "sh /kafka-healthcheck.sh >/dev/null 2>&1"]
+      interval: 15s
+      timeout: 30s
+      retries: 8
+      start_period: 40s
+
+  kafka-init:
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.kafka-init
+    environment:
+      APP_CONFIG_PATH: /app/config.example.yaml
+      GAMES_INTEL__KAFKA__BOOTSTRAP_SERVERS: kafka:29092
+      GAMES_INTEL__KAFKA__SECURITY_PROTOCOL: ${GAMES_INTEL__KAFKA__SECURITY_PROTOCOL:-SASL_PLAINTEXT}
+      GAMES_INTEL__KAFKA__SASL_MECHANISM: ${GAMES_INTEL__KAFKA__SASL_MECHANISM:-PLAIN}
+      GAMES_INTEL__KAFKA__SASL_USERNAME: ${GAMES_INTEL__KAFKA__SASL_USERNAME:-kafka}
+      GAMES_INTEL__KAFKA__SASL_PASSWORD: ${GAMES_INTEL__KAFKA__SASL_PASSWORD:?set GAMES_INTEL__KAFKA__SASL_PASSWORD in .env}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    restart: "no"
+
+  migrate:
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.app
+      args:
+        PACKAGE: games-intel-db
+        EXPECT_LANGCHAIN: "0"
+    environment:
+      <<: *app-env
+    command: ["python", "-m", "games_intel.db"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: "no"
+
+  scrape-metacritic:
+    build:
+      context: ../..
+      dockerfile: apps/scrape/metacritic/Dockerfile
+    expose:
+      - "8080"
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      <<: *app-env
+      GAMES_INTEL__ADAPTERS__METACRITIC__MODE: sidecar
+    depends_on:
+      postgres:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8080/healthz')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    mem_limit: 1g
+    restart: unless-stopped
+
+  scheduler:
+    <<: *worker-common
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.app
+      args:
+        PACKAGE: games-intel-scheduler
+        EXPECT_LANGCHAIN: "0"
+    command: ["python", "-m", "games_intel.workers.scheduler"]
+
+  tick:
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.app
+      args:
+        PACKAGE: games-intel-scheduler
+        EXPECT_LANGCHAIN: "0"
+    init: true
+    restart: unless-stopped
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      <<: *app-env
+    command: ["python", "-m", "games_intel.workers.scheduler.external_tick"]
+    depends_on:
+      <<: *infra-deps
+      scheduler:
+        condition: service_started
+
+  discovery:
+    <<: *worker-common
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.app
+      args:
+        PACKAGE: games-intel-discovery
+        EXPECT_LANGCHAIN: "0"
+    command: ["python", "-m", "games_intel.workers.discovery"]
+
+  catalog:
+    <<: *worker-common
+    build:
+      <<: *daemon-build
+    command: ["python", "-m", "games_intel.workers.catalog"]
+    deploy:
+      replicas: 2
+
+  catalog-replica:
+    <<: *worker-common
+    build:
+      <<: *daemon-build
+    command: ["python", "-m", "games_intel.workers.catalog"]
+
+  reviews:
+    <<: *worker-common
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.app
+      args:
+        PACKAGE: games-intel-reviews
+        EXPECT_LANGCHAIN: "1"
+    command: ["python", "-m", "games_intel.workers.reviews"]
+    depends_on:
+      <<: *infra-deps
+      scrape-metacritic:
+        condition: service_healthy
+
+  letsplay:
+    <<: *worker-common
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.app
+      args:
+        PACKAGE: games-intel-letsplay
+        EXPECT_LANGCHAIN: "1"
+        INSTALL_FFMPEG: "1"
+    command: ["python", "-m", "games_intel.workers.letsplay"]
+    depends_on:
+      <<: *infra-deps
+      scrape-metacritic:
+        condition: service_healthy
+
+  similarity:
+    <<: *worker-common
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.app
+      args:
+        PACKAGE: games-intel-similarity
+        EXPECT_LANGCHAIN: "0"
+    command: ["python", "-m", "games_intel.workers.similarity"]
+    depends_on:
+      <<: *infra-deps
+      scrape-metacritic:
+        condition: service_healthy
+
+  api:
+    init: true
+    restart: unless-stopped
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.app
+      args:
+        PACKAGE: games-intel-api
+        EXPECT_LANGCHAIN: "0"
+    env_file:
+      - path: ../../.env
+        required: false
+    environment:
+      <<: *app-env
+      GAMES_INTEL__API__CORS_ORIGINS: '["http://localhost:8080","http://127.0.0.1:8080"]'
+    command: ["python", "-m", "games_intel.api"]
+    volumes:
+      - covers:/data/covers
+    depends_on:
+      <<: *infra-deps
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "python",
+          "-c",
+          "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/readyz')",
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 15s
+
+  web:
+    build:
+      context: ../..
+      dockerfile: infra/compose/Dockerfile.web
+      args:
+        VITE_API_BASE_URL: /api/v1
+    ports:
+      - "8080:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://127.0.0.1/"]
+      interval: 10s
+      timeout: 5s
+      retries: 8
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  kafka_data:
+  covers:

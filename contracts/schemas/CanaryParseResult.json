@@ -1,0 +1,35 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "error_code": {
+      "anyOf": [
+        {
+          "enum": [
+            "not_found",
+            "timeout",
+            "rate_limited",
+            "parse_error",
+            "quota_exceeded",
+            "unavailable",
+            "circuit_open"
+          ],
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Error Code"
+    },
+    "ok": {
+      "title": "Ok",
+      "type": "boolean"
+    }
+  },
+  "required": [
+    "ok"
+  ],
+  "title": "CanaryParseResult",
+  "type": "object"
+}

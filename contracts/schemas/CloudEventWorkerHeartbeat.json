@@ -1,0 +1,160 @@
+{
+  "$defs": {
+    "WorkerHeartbeat": {
+      "additionalProperties": false,
+      "properties": {
+        "current_subject": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Current Subject"
+        },
+        "instance_id": {
+          "title": "Instance Id",
+          "type": "string"
+        },
+        "lag_hint": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Lag Hint"
+        },
+        "observed_at": {
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "processed_failed": {
+          "minimum": 0,
+          "title": "Processed Failed",
+          "type": "integer"
+        },
+        "processed_ok": {
+          "minimum": 0,
+          "title": "Processed Ok",
+          "type": "integer"
+        },
+        "status": {
+          "enum": [
+            "idle",
+            "running",
+            "error"
+          ],
+          "title": "Status",
+          "type": "string"
+        },
+        "worker_type": {
+          "title": "Worker Type",
+          "type": "string"
+        }
+      },
+      "required": [
+        "worker_type",
+        "instance_id",
+        "status",
+        "processed_ok",
+        "processed_failed",
+        "observed_at"
+      ],
+      "title": "WorkerHeartbeat",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "data": {
+      "$ref": "#/$defs/WorkerHeartbeat"
+    },
+    "datacontenttype": {
+      "const": "application/json",
+      "default": "application/json",
+      "title": "Datacontenttype",
+      "type": "string"
+    },
+    "dataschema": {
+      "title": "Dataschema",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "idempotencykey": {
+      "minLength": 1,
+      "title": "Idempotencykey",
+      "type": "string"
+    },
+    "runid": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Runid"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "specversion": {
+      "const": "1.0",
+      "title": "Specversion",
+      "type": "string"
+    },
+    "subject": {
+      "title": "Subject",
+      "type": "string"
+    },
+    "time": {
+      "format": "date-time",
+      "title": "Time",
+      "type": "string"
+    },
+    "traceparent": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Traceparent"
+    },
+    "type": {
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "specversion",
+    "id",
+    "source",
+    "type",
+    "time",
+    "dataschema",
+    "subject",
+    "idempotencykey",
+    "data"
+  ],
+  "title": "CloudEvent[WorkerHeartbeat]",
+  "type": "object"
+}

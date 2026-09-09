@@ -1,0 +1,8 @@
+{
+  "error_message": "missing field",
+  "error_type": "ValidationError",
+  "original_id": "evt-1",
+  "original_topic": "games.page.listed",
+  "payload_truncated": false,
+  "reason": "schema"
+}

@@ -1,0 +1,172 @@
+{
+  "$defs": {
+    "GamesPageListed": {
+      "additionalProperties": false,
+      "description": "One listing page: Catalog loads all cards in a single task/trace.",
+      "properties": {
+        "games": {
+          "items": {
+            "$ref": "#/$defs/ListedGame"
+          },
+          "title": "Games",
+          "type": "array"
+        },
+        "page": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Page"
+        },
+        "process_date": {
+          "format": "date",
+          "title": "Process Date",
+          "type": "string"
+        },
+        "run_id": {
+          "format": "uuid",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "source": {
+          "enum": [
+            "new_releases",
+            "browse"
+          ],
+          "title": "Source",
+          "type": "string"
+        }
+      },
+      "required": [
+        "run_id",
+        "process_date",
+        "source"
+      ],
+      "title": "GamesPageListed",
+      "type": "object"
+    },
+    "ListedGame": {
+      "additionalProperties": false,
+      "properties": {
+        "listing_url": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Listing Url",
+          "type": "string"
+        },
+        "metacritic_slug": {
+          "title": "Metacritic Slug",
+          "type": "string"
+        },
+        "position": {
+          "minimum": 0,
+          "title": "Position",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metacritic_slug",
+        "title",
+        "listing_url",
+        "position"
+      ],
+      "title": "ListedGame",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "data": {
+      "$ref": "#/$defs/GamesPageListed"
+    },
+    "datacontenttype": {
+      "const": "application/json",
+      "default": "application/json",
+      "title": "Datacontenttype",
+      "type": "string"
+    },
+    "dataschema": {
+      "title": "Dataschema",
+      "type": "string"
+    },
+    "id": {
+      "title": "Id",
+      "type": "string"
+    },
+    "idempotencykey": {
+      "minLength": 1,
+      "title": "Idempotencykey",
+      "type": "string"
+    },
+    "runid": {
+      "anyOf": [
+        {
+          "format": "uuid",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Runid"
+    },
+    "source": {
+      "title": "Source",
+      "type": "string"
+    },
+    "specversion": {
+      "const": "1.0",
+      "title": "Specversion",
+      "type": "string"
+    },
+    "subject": {
+      "title": "Subject",
+      "type": "string"
+    },
+    "time": {
+      "format": "date-time",
+      "title": "Time",
+      "type": "string"
+    },
+    "traceparent": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Traceparent"
+    },
+    "type": {
+      "title": "Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "specversion",
+    "id",
+    "source",
+    "type",
+    "time",
+    "dataschema",
+    "subject",
+    "idempotencykey",
+    "data"
+  ],
+  "title": "CloudEvent[GamesPageListed]",
+  "type": "object"
+}

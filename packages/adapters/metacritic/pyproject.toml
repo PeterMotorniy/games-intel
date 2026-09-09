@@ -1,0 +1,19 @@
+[project]
+name = "games-intel-adapters-metacritic"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "beautifulsoup4>=4.12",
+    "games-intel-contracts",
+    "games-intel-db",
+    "games-intel-settings",
+    "httpx>=0.27",
+    "soupsieve>=2.6",
+]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/games_intel"]

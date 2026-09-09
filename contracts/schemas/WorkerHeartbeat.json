@@ -1,0 +1,71 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "current_subject": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Current Subject"
+    },
+    "instance_id": {
+      "title": "Instance Id",
+      "type": "string"
+    },
+    "lag_hint": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Lag Hint"
+    },
+    "observed_at": {
+      "format": "date-time",
+      "title": "Observed At",
+      "type": "string"
+    },
+    "processed_failed": {
+      "minimum": 0,
+      "title": "Processed Failed",
+      "type": "integer"
+    },
+    "processed_ok": {
+      "minimum": 0,
+      "title": "Processed Ok",
+      "type": "integer"
+    },
+    "status": {
+      "enum": [
+        "idle",
+        "running",
+        "error"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "worker_type": {
+      "title": "Worker Type",
+      "type": "string"
+    }
+  },
+  "required": [
+    "worker_type",
+    "instance_id",
+    "status",
+    "processed_ok",
+    "processed_failed",
+    "observed_at"
+  ],
+  "title": "WorkerHeartbeat",
+  "type": "object"
+}

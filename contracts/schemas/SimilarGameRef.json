@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "metacritic_slug": {
+      "title": "Metacritic Slug",
+      "type": "string"
+    },
+    "rank": {
+      "minimum": 1,
+      "title": "Rank",
+      "type": "integer"
+    },
+    "score": {
+      "title": "Score",
+      "type": "number"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    }
+  },
+  "required": [
+    "metacritic_slug",
+    "title",
+    "score",
+    "rank"
+  ],
+  "title": "SimilarGameRef",
+  "type": "object"
+}

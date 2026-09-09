@@ -1,0 +1,137 @@
+
+# General Execution Standards
+
+## AI Context Header
+**When To Use**: Load for research protocols, decision-making standards, tool usage guidelines, and quality assurance. Reference for general development practices and cross-cutting concerns.
+
+**Sample Queries**:
+1. "What's the proper research methodology for evaluating this technology stack?"
+2. "How should I validate and document this architectural decision?"
+3. "What tools should I use for analyzing codebase patterns and dependencies?"
+
+## Framework Navigation
+- **Main Navigation**: [user-rules-template.mdc](./user-rules-template.mdc) - Access other framework documentation
+- **Epic Workflow**: [epic-workflow-instructions.mdc](./epic-workflow-instructions.mdc) - Workflow execution standards
+- **Problem Solving**: [problem-solving-framework.mdc](./problem-solving-framework.mdc) - Systematic troubleshooting approach
+- **Architecture Lifecycle**: [architecture-lifecycle.mdc](./architecture-lifecycle.mdc) - Architecture documentation standards
+- **Architecture Design**: [architecture-design-process.mdc](./architecture-design-process.mdc) - Research and validation methodology
+
+## Decision Making Protocol
+
+### 1. Research-First
+- Always consult **official documentation** first.
+- Use Context7 and Ask Perplexity for additional insight.
+- Record every source.
+
+### 2. Multi-Source Validation
+- Cross-check information from at least **two authoritative sources**.
+- Resolve conflicts before implementation.
+
+### 3. Quality Over Speed
+- Plan thoroughly; implement incrementally.
+- Validate after each milestone.
+
+### 4. Comprehensive Documentation
+- Every decision must be captured in task `INDEX.md` or architecture docs.
+- Trade-offs and alternatives always logged.
+
+### 5. Architecture Compliance
+- Reference / update architecture docs for **every significant change**.
+
+---
+
+## File Navigation Cheat-Sheet
+
+### Verify Directories
+```bash
+# Root workflow dir
+ls -la /.epic-workflows/
+
+# Tasks dir
+ls -la /.epic-workflows/tasks/
+
+# Architecture root
+ls -la docs/architecture/
+```
+
+### Verify Required Files
+```bash
+ls -la /.epic-workflows/tasks/Initiative_*/*/INDEX.md
+ls -la docs/architecture/*/index.md
+```
+
+### Post-Implementation Validation
+```bash
+# Show newly created task files
+find /.epic-workflows/tasks -mmin -30 -type f
+
+# Check architecture doc size
+wc -l docs/architecture/**/**/*.md | sort -n | tail -5
+```
+
+---
+
+## Tool Usage Guidelines
+
+| Tool          | Primary Purpose                               |
+|---------------|-----------------------------------------------|
+| **Context7**  | Deep codebase pattern & dependency analysis   |
+| **Perplexity**| External best-practice & doc retrieval        |
+| **grep/rg**   | Fast in-repo search for configs & patterns    |
+| **wc -l**     | Enforce <700-line doc rule                    |
+| **find**      | Structure & file existence checks             |
+
+---
+
+## Execution Workflow
+1. Plan → 2. Document → 3. Execute (small commits) → 4. Validate → 5. Record → 6. Merge
+
+### Validation Checklist
+- [ ] Tests green (unit, integration, e2e)
+- [ ] Lint & static analysis pass
+- [ ] Architecture docs updated
+- [ ] Task `INDEX.md` status = **Completed**
+
+### Rollback Strategy
+- Use Git branches; keep changes atomic.
+- Ensure previous release tag is functional.
+
+---
+
+## Communication Principles
+- **Clarity**: Use precise, unambiguous language.
+- **Context**: Provide sufficient background for decisions.
+- **Documentation**: Record all significant decisions and rationale.
+- **Transparency**: Share progress, challenges, and learnings.
+
+## Quality Assurance Standards
+
+### Code Quality
+- **Readability**: Code should be self-documenting and easy to understand.
+- **Maintainability**: Follow established patterns and conventions.
+- **Testability**: Write testable code with clear interfaces.
+- **Performance**: Consider performance implications of design decisions.
+
+### Documentation Quality
+- **Accuracy**: All documentation must be current and accurate.
+- **Completeness**: Document all significant decisions and changes.
+- **Clarity**: Use clear, concise language with examples where helpful.
+- **Structure**: Follow established documentation patterns and templates.
+
+### Process Quality
+- **Consistency**: Follow established processes and procedures.
+- **Validation**: Validate all work against requirements and standards.
+- **Continuous Improvement**: Learn from each iteration and improve processes.
+- **Collaboration**: Work effectively with team members and stakeholders.
+
+## Success Metrics
+- **Quality**: All deliverables meet established quality standards
+- **Efficiency**: Work is completed efficiently and effectively
+- **Collaboration**: Team members work together effectively
+- **Continuous Improvement**: Processes and procedures are continuously improved
+- **Documentation**: All work is properly documented and accessible
+
+This general execution standards document provides the foundation for all work within the AI Epic Framework, ensuring consistent quality, efficiency, and collaboration across all activities.
+
+
+© 2025 Engineering Excellence Council

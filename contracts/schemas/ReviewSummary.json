@@ -1,0 +1,30 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "dislikes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Dislikes",
+      "type": "array"
+    },
+    "likes": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Likes",
+      "type": "array"
+    },
+    "summary": {
+      "title": "Summary",
+      "type": "string"
+    }
+  },
+  "required": [
+    "likes",
+    "dislikes",
+    "summary"
+  ],
+  "title": "ReviewSummary",
+  "type": "object"
+}

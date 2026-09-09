@@ -1,0 +1,10 @@
+{
+  "current_subject": null,
+  "instance_id": "catalog-1",
+  "lag_hint": 0,
+  "observed_at": "2026-09-07T12:00:00Z",
+  "processed_failed": 0,
+  "processed_ok": 3,
+  "status": "idle",
+  "worker_type": "catalog"
+}

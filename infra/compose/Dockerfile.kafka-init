@@ -1,0 +1,19 @@
+FROM python:3.12-slim
+
+WORKDIR /app
+
+COPY packages/settings /app/packages/settings
+COPY packages/contracts /app/packages/contracts
+COPY packages/db /app/packages/db
+COPY packages/kafka /app/packages/kafka
+COPY config.example.yaml /app/config.example.yaml
+
+RUN pip install --no-cache-dir \
+    /app/packages/settings \
+    /app/packages/contracts \
+    /app/packages/db \
+    /app/packages/kafka
+
+ENV APP_CONFIG_PATH=/app/config.example.yaml
+
+CMD ["python", "-m", "games_intel.kafka.topics"]

@@ -1,0 +1,90 @@
+{
+  "additionalProperties": false,
+  "properties": {
+    "conclusion": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Conclusion"
+    },
+    "highlights": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Highlights",
+      "type": "array"
+    },
+    "metacritic_slug": {
+      "title": "Metacritic Slug",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "status": {
+      "enum": [
+        "ok",
+        "no_video",
+        "transcript_unavailable",
+        "quota_exceeded"
+      ],
+      "title": "Status",
+      "type": "string"
+    },
+    "video_title": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Video Title"
+    },
+    "video_url": {
+      "anyOf": [
+        {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Video Url"
+    },
+    "view_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "View Count"
+    }
+  },
+  "required": [
+    "run_id",
+    "metacritic_slug",
+    "status"
+  ],
+  "title": "GameLetsPlayAnalyzed",
+  "type": "object"
+}

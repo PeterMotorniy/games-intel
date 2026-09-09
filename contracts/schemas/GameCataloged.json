@@ -1,0 +1,176 @@
+{
+  "$defs": {
+    "PlatformScore": {
+      "additionalProperties": false,
+      "properties": {
+        "metascore": {
+          "anyOf": [
+            {
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Metascore"
+        },
+        "platform_code": {
+          "title": "Platform Code",
+          "type": "string"
+        },
+        "userscore": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Userscore"
+        }
+      },
+      "required": [
+        "platform_code"
+      ],
+      "title": "PlatformScore",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "cover_source_url": {
+      "anyOf": [
+        {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cover Source Url"
+    },
+    "cover_url": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Cover Url"
+    },
+    "description": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Description"
+    },
+    "developer": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Developer"
+    },
+    "genres": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Genres",
+      "type": "array"
+    },
+    "metacritic_slug": {
+      "title": "Metacritic Slug",
+      "type": "string"
+    },
+    "platforms": {
+      "items": {
+        "$ref": "#/$defs/PlatformScore"
+      },
+      "title": "Platforms",
+      "type": "array"
+    },
+    "process_date": {
+      "format": "date",
+      "title": "Process Date",
+      "type": "string"
+    },
+    "publisher": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Publisher"
+    },
+    "release_date": {
+      "anyOf": [
+        {
+          "format": "date",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Release Date"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "title": {
+      "title": "Title",
+      "type": "string"
+    },
+    "video_url": {
+      "anyOf": [
+        {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Video Url"
+    }
+  },
+  "required": [
+    "run_id",
+    "process_date",
+    "metacritic_slug",
+    "title"
+  ],
+  "title": "GameCataloged",
+  "type": "object"
+}
