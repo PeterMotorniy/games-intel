@@ -252,12 +252,8 @@ class DatabaseSettings(BaseModel):
 class MetacriticMarkersSettings(BaseModel):
     model_config = _STRICT
 
-    listing_container: str = (
-        '[data-testid="new-game-release-carousel"], .c-pageProductHome'
-    )
-    browse_listing_container: str = (
-        '[data-testid="filter-results"], .c-finderSitePage'
-    )
+    listing_container: str = '[data-testid="new-game-release-carousel"], .c-pageProductHome'
+    browse_listing_container: str = '[data-testid="filter-results"], .c-finderSitePage'
     listing_min_cards: int = 1
     listing_section_title: str = (
         ".c-sectionHeader_title, [data-testid='new-game-release-carousel'] h2, h1"

@@ -29,8 +29,8 @@ llm-transcripts.jsonl
 tmp_*.py
 artifacts/
 
-# Media volume
-media/
+# Cover files volume at repo root (do not ignore packages/adapters/media)
+/media/
 *.jpg
 *.jpeg
 *.png

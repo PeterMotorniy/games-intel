@@ -28,6 +28,9 @@ jobs:
       - name: OpenAPI drift
         run: uv run python -m games_intel.api.openapi --check
       - name: Compose config
+        env:
+          POSTGRES_PASSWORD: ci
+          GAMES_INTEL__KAFKA__SASL_PASSWORD: ci
         run: docker compose -f infra/compose/compose.yaml -f infra/compose/compose.prod.yaml config >/dev/null
 
   web:
