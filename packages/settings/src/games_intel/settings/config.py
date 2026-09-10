@@ -51,6 +51,7 @@ class KafkaEventsSettings(BaseModel):
     schedule_tick: str = "ingestion.schedule.tick"
     run_requested: str = "ingestion.run.requested"
     page_listed: str = "games.page.listed"
+    game_listed: str = "game.listed"
     game_cataloged: str = "game.cataloged"
     game_reviews_summarized: str = "game.reviews.summarized"
     game_letsplay_analyzed: str = "game.letsplay.analyzed"
@@ -162,7 +163,7 @@ class WorkerSliceSettings(_InstanceIdMixin):
 class DiscoverySettings(WorkerSliceSettings):
     consumer_group: str = "discovery"
     subscribe_event: str = "run_requested"
-    publish_event: str = "page_listed"
+    publish_event: str = "game_listed"
     stage_name: str = "discovered"
     list_limit: int = 20
     browse_list_limit: int = 48
@@ -170,7 +171,7 @@ class DiscoverySettings(WorkerSliceSettings):
 
 class CatalogSettings(WorkerSliceSettings):
     consumer_group: str = "catalog"
-    subscribe_event: str = "page_listed"
+    subscribe_event: str = "game_listed"
     publish_event: str = "game_cataloged"
     stage_name: str = "cataloged"
     empty_video_ok: bool = True
@@ -195,6 +196,8 @@ class LetsPlaySettings(WorkerSliceSettings):
     search_max_results: int = 10
     stt_enabled: bool = True
     transcript_max_chars: int = 4_000
+    # STT clip length (seconds from the start of the video). Search length
+    # filters live on adapters.youtube.min_duration_seconds / max_duration_seconds.
     max_video_duration_seconds: int = 180
 
 
@@ -206,7 +209,7 @@ class SimilaritySettings(WorkerSliceSettings):
     publish_event: str = "game_similar_assigned"
     stage_name: str = "similar"
     k: int = 5
-    mode: Literal["inline_all", "incremental"] = "inline_all"
+    mode: Literal["inline_all", "incremental"] = "incremental"
     inline_all_max_rows: int = 2000
     recompute_on_reviews: bool = True
     w_vector: float = 0.70
@@ -228,6 +231,7 @@ class RetrySettings(BaseModel):
     backoff_max_seconds: float = 60
     jitter_ratio: float = 0.2
     llm_structure_retries: int = 2
+    prepare_timeout_seconds: float = 90
 
 
 class DatabaseSettings(BaseModel):
@@ -249,8 +253,10 @@ class MetacriticMarkersSettings(BaseModel):
     model_config = _STRICT
 
     listing_container: str = (
-        '[data-testid="filter-results"], [data-testid="new-game-release-carousel"], '
-        '[data-testid="dropdown-sort"], .c-pageProductHome, .c-finderSitePage'
+        '[data-testid="new-game-release-carousel"], .c-pageProductHome'
+    )
+    browse_listing_container: str = (
+        '[data-testid="filter-results"], .c-finderSitePage'
     )
     listing_min_cards: int = 1
     listing_section_title: str = (
@@ -268,9 +274,7 @@ class MetacriticMarkersSettings(BaseModel):
 class MetacriticListingSelectors(BaseModel):
     model_config = _STRICT
 
-    game_card: str = (
-        '[data-testid="product-card"], .c-productCard, .c-finderProductCard'
-    )
+    game_card: str = '[data-testid="product-card"], .c-productCard, .c-finderProductCard'
     slug: str = "a[href*='/game/']"
     title: str = (
         "[data-testid='product-card-title'], [data-testid='product-title'], "
@@ -288,12 +292,10 @@ class MetacriticCardSelectors(BaseModel):
     )
     cover: str = 'img.c-productHero_image, .c-productHero img, [data-testid="product-hero"] img'
     developer: str = (
-        ".c-gameDetails_Developer .c-gameDetails_listItem, "
-        "[data-testid='hero-summary-developer']"
+        ".c-gameDetails_Developer .c-gameDetails_listItem, [data-testid='hero-summary-developer']"
     )
     publisher: str = (
-        ".c-gameDetails_Distributor .c-gameDetails_listItem, "
-        "[data-testid='hero-summary-publisher']"
+        ".c-gameDetails_Distributor .c-gameDetails_listItem, [data-testid='hero-summary-publisher']"
     )
     description: str = (
         '.c-productHero_summary, .c-pageProduct_description, [data-testid="hero-summary"]'
@@ -335,6 +337,7 @@ class MetacriticAdapterSettings(BaseModel):
 
     base_url: str = "https://www.metacritic.com"
     sidecar_base_url: str = "http://scrape-metacritic:8080"
+    sidecar_token: SecretStr = SecretStr("")
     mode: Literal["sidecar", "in_process"] = "sidecar"
     timeout_seconds: int = 30
     min_delay_ms: int = 1500
@@ -364,6 +367,8 @@ class YoutubeAdapterSettings(BaseModel):
     api_key: SecretStr = SecretStr("")
     timeout_seconds: int = 30
     search_query_template: str = "{title} let's play"
+    # Fallback clip length for downloads. Worker override: letsplay.max_video_duration_seconds.
+    clip_seconds: int = 180
     min_duration_seconds: int = 180
     max_duration_seconds: int = 7200
     exclude_title_patterns: list[str] = Field(default_factory=lambda: ["compilation", "top 10"])
@@ -392,6 +397,7 @@ class SttSettings(BaseModel):
     model: str = "whisper-1"
     base_url: str = "https://api.openai.com/v1"
     api_key: SecretStr = SecretStr("")
+    max_audio_bytes: int = 25_000_000
 
 
 class LlmSettings(BaseModel):
@@ -427,6 +433,8 @@ class ApiSettings(BaseModel):
     host: str = "0.0.0.0"
     port: int = 8000
     cors_origins: list[str] = Field(default_factory=lambda: ["http://localhost:5173"])
+    command_token: SecretStr = SecretStr("")
+    command_rate_limit_per_minute: int = 10
     heartbeat_stale_seconds: int = 30
     page_size_default: int = 20
     page_size_max: int = 100

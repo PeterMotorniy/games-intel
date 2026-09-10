@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from typing import Any, cast
 from uuid import UUID, uuid4
 
@@ -100,7 +100,7 @@ class IngestionRepository:
         trigger: RunTrigger,
         status: IngestionRunStatus = IngestionRunStatus.requested,
         run_id: UUID | None = None,
-    ) -> InsertResult:
+    ) -> InsertResult[UUID]:
         run = IngestionRun(
             id=run_id or uuid4(),
             process_date=process_date,
@@ -166,7 +166,7 @@ class IngestionRepository:
     async def record_daily_processed_slug(
         self, process_date: date, metacritic_slug: str
     ) -> InsertOutcome:
-        """Discovery-only: mark slug as taken for the calendar day."""
+        """Catalog: mark slug as taken for the calendar day after a card is cataloged or 404."""
         stmt = (
             insert(DailyProcessedSlug)
             .values(process_date=process_date, metacritic_slug=metacritic_slug)
@@ -210,7 +210,7 @@ class IngestionRepository:
         error_type: str | None = None,
         error_message: str | None = None,
         attempt_count: int | None = None,
-    ) -> InsertResult:
+    ) -> InsertResult[UUID]:
         now = utcnow()
         values: dict[str, Any] = {
             "run_id": run_id,
@@ -284,6 +284,54 @@ class IngestionRepository:
         if row is None:
             return None
         return item_record(row)
+
+    async def try_claim_item(
+        self,
+        *,
+        run_id: UUID,
+        metacritic_slug: str,
+        process_date: date,
+        stage: IngestionStage,
+        instance_id: str,
+        lease_seconds: int,
+        event_id: str | None = None,
+    ) -> bool:
+        """Commit-scoped work lease. False if another replica holds a live lease."""
+        now = utcnow()
+        until = now + timedelta(seconds=max(int(lease_seconds), 1))
+        values: dict[str, Any] = {
+            "run_id": run_id,
+            "metacritic_slug": metacritic_slug,
+            "process_date": process_date,
+            "stage": stage.value,
+            "status": IngestionItemStatus.running.value,
+            "event_id": event_id,
+            "claimed_until": until,
+            "claimed_by": instance_id,
+            "updated_at": now,
+        }
+        stmt = (
+            insert(IngestionItem)
+            .values(**values)
+            .on_conflict_do_update(
+                constraint="uq_ingestion_items_run_slug_stage",
+                set_={
+                    "status": IngestionItemStatus.running.value,
+                    "event_id": event_id,
+                    "claimed_until": until,
+                    "claimed_by": instance_id,
+                    "updated_at": now,
+                },
+                where=(
+                    (IngestionItem.claimed_until.is_(None))
+                    | (IngestionItem.claimed_until <= now)
+                    | (IngestionItem.claimed_by == instance_id)
+                ),
+            )
+            .returning(IngestionItem.id)
+        )
+        claimed_id = (await self._session.execute(stmt)).scalar_one_or_none()
+        return claimed_id is not None
 
     async def lock_item(
         self,

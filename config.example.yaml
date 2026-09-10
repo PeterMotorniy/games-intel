@@ -25,6 +25,7 @@ kafka:
     schedule_tick: ingestion.schedule.tick
     run_requested: ingestion.run.requested
     page_listed: games.page.listed
+    game_listed: game.listed
     game_cataloged: game.cataloged
     game_reviews_summarized: game.reviews.summarized
     game_letsplay_analyzed: game.letsplay.analyzed
@@ -69,7 +70,7 @@ discovery:
   enabled: true
   consumer_group: discovery
   subscribe_event: run_requested
-  publish_event: page_listed
+  publish_event: game_listed
   stage_name: discovered
   heartbeat_interval_seconds: 10
   instance_id: ""
@@ -80,7 +81,7 @@ discovery:
 catalog:
   enabled: true
   consumer_group: catalog
-  subscribe_event: page_listed
+  subscribe_event: game_listed
   publish_event: game_cataloged
   stage_name: cataloged
   heartbeat_interval_seconds: 10
@@ -114,6 +115,7 @@ letsplay:
   search_max_results: 10
   stt_enabled: true
   transcript_max_chars: 4000
+  # Audio clip sent to Whisper. Search duration window is adapters.youtube.min/max_duration_seconds.
   max_video_duration_seconds: 180
 
 similarity:
@@ -128,7 +130,7 @@ similarity:
   instance_id: ""
   lease_seconds: 120
   k: 5
-  mode: inline_all
+  mode: incremental
   inline_all_max_rows: 2000
   recompute_on_reviews: true
   w_vector: 0.70
@@ -147,6 +149,7 @@ retry:
   backoff_max_seconds: 60
   jitter_ratio: 0.2
   llm_structure_retries: 2
+  prepare_timeout_seconds: 90
 
 database:
   url: ""
@@ -158,6 +161,7 @@ adapters:
   metacritic:
     base_url: https://www.metacritic.com
     sidecar_base_url: http://scrape-metacritic:8080
+    sidecar_token: ""
     mode: sidecar
     timeout_seconds: 30
     min_delay_ms: 1500
@@ -174,7 +178,8 @@ adapters:
     circuit_fail_threshold: 3
     circuit_open_seconds: 600
     markers:
-      listing_container: "[data-testid='filter-results'], [data-testid='new-game-release-carousel'], [data-testid='dropdown-sort'], .c-pageProductHome, .c-finderSitePage"
+      listing_container: "[data-testid='new-game-release-carousel'], .c-pageProductHome"
+      browse_listing_container: "[data-testid='filter-results'], .c-finderSitePage"
       listing_min_cards: 1
       listing_section_title: ".c-sectionHeader_title, [data-testid='new-game-release-carousel'] h2, h1"
       card_container: "[data-testid='product-hero'], .product-hero, .c-productHero"
@@ -208,6 +213,8 @@ adapters:
     api_key: ""
     timeout_seconds: 30
     search_query_template: "{title} let's play"
+    # Default download clip; letsplay.max_video_duration_seconds is what the worker passes.
+    clip_seconds: 180
     min_duration_seconds: 180
     max_duration_seconds: 7200
     exclude_title_patterns:
@@ -225,6 +232,7 @@ stt:
   model: whisper-1
   base_url: https://api.openai.com/v1
   api_key: ""
+  max_audio_bytes: 25000000
 
 llm:
   model: google/gemini-2.5-flash-lite
@@ -252,6 +260,8 @@ api:
   heartbeat_stale_seconds: 30
   page_size_default: 20
   page_size_max: 100
+  command_token: ""
+  command_rate_limit_per_minute: 10
 
 web:
   api_base_url: http://localhost:8000/api/v1

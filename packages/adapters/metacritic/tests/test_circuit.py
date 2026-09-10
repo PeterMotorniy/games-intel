@@ -58,6 +58,17 @@ def test_half_open_parse_error_reopens() -> None:
     breaker.record_parse_error()
     clock.advance(5)
     assert breaker.allow_request() is True
+    assert breaker.allow_request() is False
     breaker.record_parse_error()
     assert breaker.snapshot.state == "open"
     assert breaker.allow_request() is False
+
+
+def test_half_open_timeout_reopens() -> None:
+    clock = FakeClock(datetime(2026, 9, 8, tzinfo=UTC))
+    breaker = CircuitBreaker(fail_threshold=1, open_seconds=5, clock=clock)
+    breaker.record_parse_error()
+    clock.advance(5)
+    assert breaker.allow_request() is True
+    breaker.record_failure()
+    assert breaker.snapshot.state == "open"

@@ -59,6 +59,7 @@ const SNAPSHOT: MonitorSnapshot = {
 class FakeEventSource {
   static instances: FakeEventSource[] = [];
   onmessage: ((event: MessageEvent) => void) | null = null;
+  onerror: ((event: Event) => void) | null = null;
   url: string;
   closed = false;
 
@@ -179,7 +180,7 @@ describe("MonitorPage", () => {
     expect(gets).toHaveLength(1);
   });
 
-  it("always shows review and lets play tasks on an empty browse page", async () => {
+  it("does not invent review and lets play tasks on an empty browse page", async () => {
     vi.stubGlobal("EventSource", FakeEventSource);
     mockFetch(() =>
       jsonResponse({
@@ -199,9 +200,9 @@ describe("MonitorPage", () => {
     );
     renderWithApp(<MonitorPage />);
     expect(await screen.findByRole("heading", { name: "Manual run page 1" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Collect reviews, Completed/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Collect let's play, Completed/i })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /Find similar games, Completed/i })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Collect reviews/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Collect let's play/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Find similar games/i })).not.toBeInTheDocument();
     expect(screen.getByText(/No new games this run/)).toBeInTheDocument();
   });
 });

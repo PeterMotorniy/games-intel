@@ -49,6 +49,7 @@ class SidecarMetacriticClient:
             timeout=timeout,
         )
         self._timeout_seconds = metacritic.timeout_seconds
+        self._sidecar_token = metacritic.sidecar_token.get_secret_value().strip()
 
     async def aclose(self) -> None:
         if self._owns_client:
@@ -80,7 +81,10 @@ class SidecarMetacriticClient:
 
     async def _post(self, path: str, body: dict[str, Any]) -> Any:
         try:
-            response = await self._client.post(path, json=body)
+            headers = {}
+            if self._sidecar_token:
+                headers["X-Scrape-Token"] = self._sidecar_token
+            response = await self._client.post(path, json=body, headers=headers)
         except httpx.TimeoutException as exc:
             raise MetacriticAdapterError("timeout", "sidecar request timed out") from exc
         except httpx.HTTPError as exc:

@@ -140,25 +140,6 @@ export function runGraphTitle(run: MonitorRunRead): string {
   return `${trigger} run page ${runPageNumber(run)}`;
 }
 
-function idleDownstreamBranch(run: MonitorRunRead, catalog: PipelineTask): PipelineGameBranch {
-  const catalogTerminal =
-    catalog.status === "completed" || catalog.status === "failed" || catalog.status === "degraded";
-  const status: PipelineTaskStatus = catalogTerminal ? "completed" : "pending";
-  return {
-    slug: "",
-    title: null,
-    tasks: DOWNSTREAM_STAGES.map((stage) => ({
-      id: `${run.id}:_:${stage}`,
-      kind: stage,
-      label: STAGE_LABEL[stage],
-      status,
-      startedAt: catalog.startedAt,
-      endedAt: status === "completed" ? catalog.endedAt : null,
-      errors: [],
-    })),
-  };
-}
-
 function catalogStatusForRun(run: MonitorRunRead, catalogItems: MonitorItemRead[], slugs: string[]): PipelineTaskStatus {
   if (catalogItems.length === 0) {
     if (run.status === "failed") {
@@ -298,7 +279,7 @@ export function buildRunGraph(run: MonitorRunRead, items: MonitorItemRead[]): Pi
     run,
     runTask,
     catalogTask,
-    games: games.length > 0 ? games : [idleDownstreamBranch(run, catalogTask)],
+    games,
   };
 }
 

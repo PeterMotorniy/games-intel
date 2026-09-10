@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Sequence
 from datetime import date, datetime
 from decimal import Decimal
 
@@ -245,6 +246,23 @@ def _letsplay(game: GameRecord) -> LetsPlayRead | None:
     )
 
 
+def headline_scores(platforms: Sequence[PlatformScore]) -> tuple[int | None, float | None]:
+    """Metacritic hero score: best metascore, userscore from that same platform when present."""
+    best: PlatformScore | None = None
+    best_user: float | None = None
+    for row in platforms:
+        if row.userscore is not None and (best_user is None or row.userscore > best_user):
+            best_user = row.userscore
+        if row.metascore is None:
+            continue
+        if best is None or row.metascore > (best.metascore or 0):
+            best = row
+    if best is None:
+        return None, best_user
+    user = best.userscore if best.userscore is not None else best_user
+    return best.metascore, user
+
+
 def similar_items(
     slug: str,
     rows: tuple[SimilarGameRecord, ...],
@@ -267,6 +285,15 @@ def game_card(
     items: dict[tuple[str, IngestionStage], IngestionItemRecord] | None = None,
 ) -> GameCardRead:
     stage_items = items or {}
+    platforms = [
+        PlatformScore(
+            platform_code=row.platform_code,
+            metascore=row.metascore,
+            userscore=_userscore(row.userscore),
+        )
+        for row in game.platforms
+    ]
+    metascore, userscore = headline_scores(platforms)
     return GameCardRead(
         metacritic_slug=game.metacritic_slug,
         title=game.title,
@@ -277,14 +304,9 @@ def game_card(
         video_url=game.video_url,
         genres=list(game.genres),
         release_date=game.release_date,
-        platforms=[
-            PlatformScore(
-                platform_code=row.platform_code,
-                metascore=row.metascore,
-                userscore=_userscore(row.userscore),
-            )
-            for row in game.platforms
-        ],
+        metascore=metascore,
+        userscore=userscore,
+        platforms=platforms,
         critic=_review(game.critic_likes, game.critic_dislikes, game.critic_summary),
         user=_review(game.user_likes, game.user_dislikes, game.user_summary),
         letsplay=_letsplay(game),

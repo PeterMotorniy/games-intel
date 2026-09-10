@@ -110,15 +110,34 @@ function useMonitorStream(enabled: boolean) {
     if (!enabled || typeof EventSource === "undefined") {
       return;
     }
-    const source = new EventSource(monitorStreamUrl());
-    source.onmessage = (event) => {
-      try {
-        const next = JSON.parse(event.data) as MonitorSnapshot;
-        queryClient.setQueryData(queryKeys.monitor(), next);
-      } catch {
-        // Ignore a malformed frame; snapshot query remains the source of truth.
-      }
+    let retry = 0;
+    let timer: number | undefined;
+    let source: EventSource | null = null;
+    const connect = () => {
+      source = new EventSource(monitorStreamUrl());
+      source.onmessage = (event) => {
+        retry = 0;
+        try {
+          const next = JSON.parse(event.data) as MonitorSnapshot;
+          queryClient.setQueryData(queryKeys.monitor(), next);
+        } catch {
+          // Ignore a malformed frame; snapshot query remains the source of truth.
+        }
+      };
+      source.onerror = () => {
+        source?.close();
+        source = null;
+        const delay = Math.min(1000 * 2 ** retry, 15000);
+        retry += 1;
+        timer = window.setTimeout(connect, delay);
+      };
     };
-    return () => source.close();
+    connect();
+    return () => {
+      if (timer !== undefined) {
+        window.clearTimeout(timer);
+      }
+      source?.close();
+    };
   }, [enabled, queryClient]);
 }

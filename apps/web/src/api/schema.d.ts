@@ -188,6 +188,8 @@ export interface components {
             letsplay?: components["schemas"]["LetsPlayRead"] | null;
             /** Metacritic Slug */
             metacritic_slug: string;
+            /** Metascore */
+            metascore?: number | null;
             /** Platforms */
             platforms?: components["schemas"]["PlatformScore"][];
             /** Publisher */
@@ -199,6 +201,8 @@ export interface components {
             /** Title */
             title: string;
             user?: components["schemas"]["ReviewSummary"] | null;
+            /** Userscore */
+            userscore?: number | null;
             /** Video Url */
             video_url?: string | null;
         };

@@ -128,6 +128,8 @@ def test_openapi_contains_games_paths_and_read_schemas() -> None:
     card = models["GameCardRead"]["properties"]
     assert "letsplay" in card
     assert "hydration" in card
+    assert "metascore" in card
+    assert "userscore" in card
     assert "catalog_collection" in models["GameListItemRead"]["properties"]
     assert "critic" in card
     similar_ref = models["SimilarGameRef"]["properties"]["score"]
@@ -267,6 +269,8 @@ async def test_game_card_404_and_partial_hydration(
     assert body["letsplay"] is None
     assert body["similar"] == []
     assert body["title"] == "Partial"
+    assert body["metascore"] == 96
+    assert body["userscore"] == 7.8
     assert body["hydration"]["catalog"]["status"] == "ready"
     assert body["hydration"]["critic"]["status"] == "idle"
     assert body["hydration"]["user"]["status"] == "idle"

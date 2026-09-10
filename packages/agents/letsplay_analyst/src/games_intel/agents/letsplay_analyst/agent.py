@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from games_intel.agents.letsplay_analyst.checkpoint import (
     AGENT_NAME,
     build_thread_id,
+    input_digest,
     open_checkpointer,
 )
 from games_intel.agents.letsplay_analyst.exceptions import LlmStructureError, LlmTransientError
@@ -69,7 +70,8 @@ class LetsPlayAnalyst:
         return self._graph
 
     async def ainvoke(self, inp: LetsPlayAnalystInput) -> LetsPlayConclusion:
-        thread_id = build_thread_id(inp.run_id, inp.metacritic_slug)
+        digest = input_digest(inp.video_title, inp.transcript_excerpt)
+        thread_id = build_thread_id(inp.run_id, inp.metacritic_slug, digest)
         graph = await self._ensure_graph()
         config = {
             "configurable": {"thread_id": thread_id},

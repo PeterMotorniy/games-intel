@@ -3,6 +3,7 @@ from __future__ import annotations
 import logging
 import shutil
 import tempfile
+import threading
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol
@@ -15,7 +16,12 @@ logger = logging.getLogger("games_intel.adapters.youtube")
 
 
 class AudioDownloader(Protocol):
-    def download(self, video_id: str, max_duration_seconds: int) -> str | None: ...
+    def download(
+        self,
+        video_id: str,
+        max_duration_seconds: int,
+        cancel: threading.Event | None = None,
+    ) -> str | None: ...
 
 
 class YtDlpAudioDownloader:
@@ -24,7 +30,12 @@ class YtDlpAudioDownloader:
     def __init__(self, timeout_seconds: int = 30) -> None:
         self._timeout_seconds = timeout_seconds
 
-    def download(self, video_id: str, max_duration_seconds: int) -> str | None:
+    def download(
+        self,
+        video_id: str,
+        max_duration_seconds: int,
+        cancel: threading.Event | None = None,
+    ) -> str | None:
         if not is_safe_video_id(video_id):
             logger.warning("youtube audio refused unsafe video_id")
             return None
@@ -39,12 +50,17 @@ class YtDlpAudioDownloader:
         def _ranges(_info: object, _ydl: object) -> list[dict[str, float]]:
             return [{"start_time": 0.0, "end_time": float(end)}]
 
+        def _progress(_status: object) -> None:
+            if cancel is not None and cancel.is_set():
+                raise YoutubeAdapterError("timeout", "audio download cancelled")
+
         options = ydl_options(
             self._timeout_seconds,
             format="bestaudio/best",
             outtmpl=outtmpl,
             download_ranges=_ranges,
             noplaylist=True,
+            progress_hooks=[_progress],
         )
         url = watch_url(video_id)
         try:
@@ -70,7 +86,13 @@ class FakeAudioDownloader:
         self._mapping = dict(mapping or {})
         self.calls: list[tuple[str, int]] = []
 
-    def download(self, video_id: str, max_duration_seconds: int) -> str | None:
+    def download(
+        self,
+        video_id: str,
+        max_duration_seconds: int,
+        cancel: threading.Event | None = None,
+    ) -> str | None:
+        del cancel
         self.calls.append((video_id, max_duration_seconds))
         if video_id not in self._mapping:
             return None

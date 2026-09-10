@@ -101,6 +101,7 @@ def test_architecture_defaults(monkeypatch: pytest.MonkeyPatch) -> None:
         "schedule_tick",
         "run_requested",
         "page_listed",
+        "game_listed",
         "game_cataloged",
         "game_reviews_summarized",
         "game_letsplay_analyzed",
@@ -149,9 +150,9 @@ def test_instance_id_comes_from_hostname(monkeypatch: pytest.MonkeyPatch) -> Non
 def test_workers_read_topics_from_settings(monkeypatch: pytest.MonkeyPatch) -> None:
     _clear_overlay(monkeypatch)
     loaded = Settings()
-    assert loaded.discovery.publish_event == "page_listed"
-    assert loaded.event_name(loaded.discovery.publish_event) == "games.page.listed"
-    assert loaded.event_name(loaded.catalog.subscribe_event) == "games.page.listed"
+    assert loaded.discovery.publish_event == "game_listed"
+    assert loaded.event_name(loaded.discovery.publish_event) == "game.listed"
+    assert loaded.event_name(loaded.catalog.subscribe_event) == "game.listed"
     assert loaded.event_name(loaded.reviews.subscribe_event) == "game.cataloged"
     assert loaded.event_name(loaded.letsplay.subscribe_event) == "game.cataloged"
 

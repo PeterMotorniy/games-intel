@@ -241,9 +241,9 @@ class OutboxInsert:
 
 
 @dataclass(frozen=True, slots=True)
-class InsertResult:
+class InsertResult[IdT]:
     outcome: InsertOutcome
-    id: UUID | int | None = None
+    id: IdT | None = None
 
 
 @dataclass(frozen=True, slots=True)

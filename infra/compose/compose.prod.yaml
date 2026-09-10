@@ -39,3 +39,7 @@ services:
   migrate:
     environment:
       <<: *prod-env
+  postgres:
+    ports: []
+  kafka:
+    ports: []

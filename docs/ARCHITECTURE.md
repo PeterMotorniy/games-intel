@@ -28,7 +28,7 @@ flowchart LR
   end
   subgraph bus [Kafka]
     TRun[ingestion.run.requested]
-    TPage[games.page.listed]
+    TListed[game.listed]
     TCat[game.cataloged]
     TRev[game.reviews.summarized]
     TYt[game.letsplay.analyzed]
@@ -62,8 +62,8 @@ flowchart LR
   ASched --> TSimRe
   TRun --> ADisc
   ADisc --> MMeta
-  ADisc --> TPage
-  TPage --> ACat
+  ADisc --> TListed
+  TListed --> ACat
   ACat --> MMeta
   ACat --> Media
   ACat --> TCat
@@ -101,8 +101,8 @@ infra/compose/
 
 1. Cron or UI publishes `ingestion.schedule.tick` → SchedulerWorker.
 2. First claimed run of the day: New Releases, limit `scheduler.default_limit` (20). Later ticks: browse page `max(last_browse_page, completed/in-flight browse) + 1`. A **failed** listing does not reserve the page; the next tick retries the same page.
-3. DiscoveryWorker: canary parse, then listing through MetacriticPort. Drops slugs already in `daily_processed_slugs` for today. One `games.page.listed` per run. `parse_error` / `circuit_open` → cursor stays, run failed (P0).
-4. CatalogWorker loads **every card on that page from one Kafka message**, then emits `game.cataloged` per successful slug (new `traceparent` per game).
+3. DiscoveryWorker: canary parse, then listing through MetacriticPort. Drops slugs already in `daily_processed_slugs` for today. One `game.listed` CloudEvent **per game** (Kafka key = slug). `parse_error` / `circuit_open` → cursor stays, run failed (P0). Empty listing still completes the run and advances the cursor.
+4. CatalogWorker consumes one game per message. Success or 404 writes `daily_processed_slugs`. Transient sidecar errors retry that game only. Then emit `game.cataloged` (new `traceparent`).
 5. Reviews, LetsPlay, and Similarity start from `game.cataloged` in parallel. Similarity also listens to `game.reviews.summarized` when `similarity.recompute_on_reviews` is true.
 6. UI reads the projection. Covers are local files at `/api/v1/media/covers/{slug}`.
 
@@ -110,22 +110,22 @@ infra/compose/
 
 ## Workers
 
-Each worker is a long-lived Python process: poll Kafka → validate CloudEvent → adapter and optional agent → persist domain + outbox + `processed_events` in one transaction → commit offset. Transient errors backoff without committing. Schema poison goes to DLQ, then offset commit.
+Each worker is a long-lived Python process: poll Kafka → claim item lease → `prepare` (HTTP/LLM) → persist domain + outbox + `processed_events` in one transaction → commit offset. Transient errors backoff without committing. Schema poison and terminal handler failures go to DLQ via the outbox, then offset commit.
 
 | Worker | Kafka in | Kafka out | External I/O | Model |
 |--------|----------|-----------|--------------|-------|
 | Scheduler | `schedule_tick` | `run_requested`, hourly `similarity_recompute` | none | no |
-| Discovery | `run_requested` | `page_listed` | Metacritic listing | no |
-| Catalog | `page_listed` | `game.cataloged` | Metacritic card + cover file | no |
+| Discovery | `run_requested` | `game_listed` | Metacritic listing | no |
+| Catalog | `game_listed` | `game.cataloged` | Metacritic card + cover file | no |
 | Reviews | `game.cataloged` | `game.reviews.summarized` | Metacritic reviews | ReviewSummarizer |
 | LetsPlay | `game.cataloged` | `game.letsplay.analyzed` | YouTube | Transcription (opt) + Analyst |
 | Similarity | cataloged, reviews, recompute | `game.similar.assigned` | embeddings HTTP | no LangGraph |
 
-**Scheduler.** Advisory lock + unique in-flight run per `(process_date, source, page)`. `tick_source=external` (Compose `tick` container) so two scheduler replicas cannot double-fire cron.
+**Scheduler.** Advisory lock + unique in-flight run per `(process_date, source, page)`. Lock miss is a transient retry so `processed_events` is not committed. Duplicate unique-run is a no-op (does not steal the next page). `tick_source=external` (Compose `tick` container) so two scheduler replicas cannot double-fire cron.
 
-**Discovery.** New Releases: up to `discovery.list_limit`. Browse: whole page up to `discovery.browse_list_limit`. Empty page with DOM markers present → success, cursor +1. Missing markers → `parse_error`, cursor frozen.
+**Discovery.** New Releases: up to `discovery.list_limit`. Browse: whole page up to `discovery.browse_list_limit`. Empty page with DOM markers present → success, cursor +1. Missing markers → `parse_error`, cursor frozen. Does **not** write `daily_processed_slugs`.
 
-**Catalog.** Writes title, local cover URL, developer, publisher, genres, release date, description, trailer, platforms + scores. Does not touch review / let's-play columns. Game 404 → that item failed; other cards on the page continue. Sidecar timeout on a card fails remaining cards of the page with the same error (no 24× timeout loop).
+**Catalog.** Writes title, local cover URL, developer, publisher, genres, release date, description, trailer, platforms + scores. Does not touch review / let's-play columns. Game 404 → that item failed and the slug is marked processed for the day. Sidecar timeout retries the same game.
 
 **Reviews.** Fetches critic then user batches sequentially. Timeout on one side does not drop the other. Empty batches → `degraded`, agent skipped. Otherwise structured summaries in English.
 
@@ -144,13 +144,13 @@ For pair `(G, H)`, `H ≠ G`:
 | Cosine of embeddings, scaled to `[0, 1]` | `w_vector=0.70` |
 | Jaccard of platform codes | `w_platform=0.15` |
 | Jaccard of genres | `w_genre=0.10` |
-| `exp(-|release_days| / 365)`; missing date → 0 | `w_release=0.05` |
+| `exp(-|release_days| / 365)`; missing date → signal omitted | `w_release=0.05` |
 
 Stored `similar_games.score` is the **hybrid** score. Self-links are forbidden by schema. Top-K: `similarity.k` (default 5).
 
-**`inline_all` (default, until `inline_all_max_rows`).** On cataloged/reviews: upsert G's vector, then rebuild `similar_games` for every game that has an embedding in one transaction. A new title immediately appears on other cards. One outbound `game.similar.assigned` for the triggering game.
+**`incremental` (default).** Top-K for G, then reverse-refresh a neighbor candidate set. Full `scope=all` recompute is also published by Scheduler on `similarity.full_recompute_cron`.
 
-**`incremental`.** Top-K for G, then reverse-refresh a neighbor candidate set. Full `scope=all` recompute is also published by Scheduler on `similarity.full_recompute_cron`.
+**`inline_all`.** On cataloged/reviews: upsert G's vector, then rebuild `similar_games` for every game that has an embedding in one transaction (capped by `inline_all_max_rows`).
 
 Below `similarity.hnsw_min_rows`, search is a sequential scan. No embedding → stage `degraded`, empty list, not failed.
 
@@ -164,7 +164,7 @@ An agent is a short procedure the worker calls **after** deterministic collectio
 | Transcription | audio ref from YouTubePort | English text | OpenAI Whisper translations |
 | LetsPlayAnalyst | truncated transcript | conclusion + highlights | OpenRouter chat |
 
-Prompts are files under `packages/agents/*/prompts/` with an explicit output contract. Graphs are a few structured-output nodes, no tools. LangGraph `PostgresSaver` is used **only** in Reviews/LetsPlay so an expensive successful LLM call survives a crash before persist. `thread_id` = `{run_id}:{slug}:{agent_name}`.
+Prompts are files under `packages/agents/*/prompts/` with an explicit output contract. Graphs are a few structured-output nodes, no tools. LangGraph `PostgresSaver` is used **only** in Reviews/LetsPlay so an expensive successful LLM call survives a crash before persist. `thread_id` = `{run_id}:{slug}:{agent_name}:{input_digest}`.
 
 ## Events
 
@@ -176,7 +176,7 @@ Envelope: CloudEvents 1.0 JSON. Required: `id` (UUIDv7), `source`, `type`, `time
 |--------------|----------|-----------|
 | `ingestion.schedule.tick` | tick container, Query API | Scheduler |
 | `ingestion.run.requested` | Scheduler | Discovery |
-| `games.page.listed` | Discovery | Catalog |
+| `game.listed` | Discovery | Catalog |
 | `game.cataloged` | Catalog | Reviews, LetsPlay, Similarity |
 | `game.reviews.summarized` | Reviews | Similarity |
 | `game.letsplay.analyzed` | LetsPlay | (DB projection) |
@@ -201,9 +201,9 @@ Stable game key: `metacritic_slug`, not title. Each worker updates **its own col
 | `ingestion_cursors` | Per `process_date`: new-releases done, last browse page |
 | `ingestion_runs` | One run per tick; unique in-flight `(process_date, source, page)` |
 | `ingestion_items` | Per game/stage status, attempts, sanitized error |
-| `daily_processed_slugs` | Discovery-only “already seen today” |
+| `daily_processed_slugs` | Catalog (success/404) “already seen today” |
 | `processed_events` | `(worker_type, event_id)` and `(worker_type, idempotency_key)` |
-| `outbox` | Unpublished CloudEvents; relay claims `SKIP LOCKED` |
+| `outbox` | Unpublished CloudEvents; relay claims with a lease, then produces after commit |
 | `worker_heartbeats` | `(worker_type, instance_id)` |
 | `external_page_cache` | Sidecar HTML TTL cache |
 | `adapter_health` | Metacritic circuit / parse streak |
@@ -217,7 +217,7 @@ Schema changes only via Alembic (`packages/db`). Compose applies migrations in t
 Playwright runs in `apps/scrape/metacritic` and speaks HTTP JSON. Workers use `MetacriticPort`. Selectors and DOM **markers** are settings.
 
 - Markers present, zero games → empty page success, cursor +1.
-- Marker missing → `parse_error`, cursor frozen, no `games.page.listed`.
+- Marker missing → `parse_error`, cursor frozen, no `game.listed`.
 - Golden HTML: `tests/fixtures/metacritic/`. Parser tests never hit the network. A layout change means update selectors **and** fixtures.
 - Page cache TTL (`adapters.metacritic.cache_ttl_seconds`) so retries do not hammer the site.
 - Circuit breaker: `circuit_fail_threshold` / `circuit_open_seconds`. Open circuit is Transient for the worker and P0 on the monitor.

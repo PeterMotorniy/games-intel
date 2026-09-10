@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import threading
 
 from games_intel.adapters.youtube.audio import AudioDownloader, YtDlpAudioDownloader
 from games_intel.adapters.youtube.captions import CaptionsFetcher, YtDlpCaptionsFetcher
@@ -68,6 +69,8 @@ class YouTubeAdapter:
                 asyncio.to_thread(self._captions.fetch, inp.video_id),
                 timeout=_media_timeout(self._timeout_seconds),
             )
+        except TimeoutError as exc:
+            raise YoutubeAdapterError("timeout", "youtube captions timed out") from exc
         except Exception:
             return TranscriptResult(
                 status="transcript_unavailable", language=None, text="", truncated=False
@@ -87,13 +90,20 @@ class YouTubeAdapter:
     async def get_audio(self, inp: GetAudioInput) -> AudioResult:
         if not is_safe_video_id(inp.video_id):
             return AudioResult(status="unavailable", audio_ref=None)
+        cancel = threading.Event()
         try:
             audio_timeout = _media_timeout(self._timeout_seconds, inp.max_duration_seconds)
             audio_ref = await asyncio.wait_for(
-                asyncio.to_thread(self._audio.download, inp.video_id, inp.max_duration_seconds),
+                asyncio.to_thread(
+                    self._audio.download, inp.video_id, inp.max_duration_seconds, cancel
+                ),
                 timeout=audio_timeout,
             )
+        except TimeoutError:
+            cancel.set()
+            return AudioResult(status="unavailable", audio_ref=None)
         except Exception:
+            cancel.set()
             return AudioResult(status="unavailable", audio_ref=None)
         if not audio_ref:
             return AudioResult(status="unavailable", audio_ref=None)

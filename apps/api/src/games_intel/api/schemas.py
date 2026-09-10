@@ -104,6 +104,8 @@ class GameCardRead(BaseModel):
     video_url: str | None = None
     genres: list[str] = Field(default_factory=list)
     release_date: date | None = None
+    metascore: int | None = None
+    userscore: float | None = None
     platforms: list[PlatformScore] = Field(default_factory=list)
     critic: ReviewSummary | None = None
     user: ReviewSummary | None = None

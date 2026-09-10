@@ -12,6 +12,7 @@ from games_intel.db.records import OutboxInsert
 from games_intel.db.repositories.ingestion import IngestionRepository
 from games_intel.db.repositories.outbox import OutboxRepository
 from games_intel.db.types import InsertOutcome, RunTrigger
+from games_intel.kafka.exceptions import TransientError
 from games_intel.kafka.serialization import cloud_event_to_dict
 from games_intel.kafka.source import worker_source
 from games_intel.settings import Settings
@@ -19,7 +20,6 @@ from games_intel.workers.scheduler.source import decide_source_and_page
 
 _WORKER_TYPE = "scheduler"
 _ALLOWED_SOURCES: frozenset[str] = frozenset({"new_releases", "browse"})
-_CLAIM_ATTEMPTS = 16
 
 
 class SchedulerHandler:
@@ -42,37 +42,35 @@ class SchedulerHandler:
             self.lock_attempts += 1
             acquired = await ingestion.try_advisory_lock(self.settings.scheduler.advisory_lock_key)
             if not acquired:
-                return
+                raise TransientError("scheduler lock busy")
             self.lock_acquired += 1
-        for _ in range(_CLAIM_ATTEMPTS):
-            source, page = decide_source_and_page(
-                await ingestion.get_cursor(tick.process_date),
-                self.settings,
-                await ingestion.list_runs_for_date(tick.process_date),
-            )
-            created = await ingestion.create_run(
-                process_date=tick.process_date,
-                source=source,
-                page=page,
-                limit=self.settings.scheduler.default_limit,
-                trigger=RunTrigger(tick.trigger),
-            )
-            if created.outcome is InsertOutcome.duplicate or created.id is None:
-                continue
-            run_id = created.id
-            if not isinstance(run_id, UUID):
-                msg = "create_run must return a UUID run id"
-                raise TypeError(msg)
-            self.runs_created += 1
-            await _enqueue_run_requested(
-                session,
-                self.settings,
-                tick=tick,
-                run_id=run_id,
-                source=source,
-                page=page,
-            )
+        source, page = decide_source_and_page(
+            await ingestion.get_cursor(tick.process_date),
+            self.settings,
+            await ingestion.list_runs_for_date(tick.process_date),
+        )
+        created = await ingestion.create_run(
+            process_date=tick.process_date,
+            source=source,
+            page=page,
+            limit=self.settings.scheduler.default_limit,
+            trigger=RunTrigger(tick.trigger),
+        )
+        if created.outcome is InsertOutcome.duplicate or created.id is None:
             return
+        run_id = created.id
+        if not isinstance(run_id, UUID):
+            msg = "create_run must return a UUID run id"
+            raise TypeError(msg)
+        self.runs_created += 1
+        await _enqueue_run_requested(
+            session,
+            self.settings,
+            tick=tick,
+            run_id=run_id,
+            source=source,
+            page=page,
+        )
 
 
 async def _enqueue_run_requested(

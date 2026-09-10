@@ -182,15 +182,14 @@ async def test_twenty_dto_twenty_events_seen_filtered(
     await loop.process_record(_record(_run_event(event_id="run-20")))
     _see_committed(session)
     rows = await OutboxRepository(session).claim("discovery", limit=50)
-    assert len(rows) == 1
-    slugs = [game["metacritic_slug"] for game in rows[0].payload["data"]["games"]]
+    assert len(rows) == 19
+    slugs = [row.payload["data"]["game"]["metacritic_slug"] for row in rows]
     assert len(slugs) == 19
     assert "game-00" not in slugs
     assert "game-01" in slugs
-    assert rows[0].partition_key == str(RUN_ID)
+    assert {row.partition_key for row in rows} == set(slugs)
     daily = await IngestionRepository(session).list_daily_processed_slugs(PROCESS_DATE)
-    assert "game-00" in daily
-    assert len(daily) == 20
+    assert daily == ("game-00",)
     run = await IngestionRepository(session).get_run(RUN_ID)
     assert run is not None
     assert run.status is IngestionRunStatus.completed
@@ -200,7 +199,7 @@ async def test_twenty_dto_twenty_events_seen_filtered(
     assert cursor.new_releases_done is True
 
 
-async def test_twenty_unseen_emits_one_page_event(
+async def test_twenty_unseen_emits_one_listed_event_each(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
 ) -> None:
@@ -211,11 +210,13 @@ async def test_twenty_unseen_emits_one_page_event(
     await loop.process_record(_record(_run_event(event_id="run-all-new")))
     _see_committed(session)
     rows = await OutboxRepository(session).claim("discovery", limit=50)
-    assert len(rows) == 1
-    assert rows[0].payload["type"] == _settings().event_name("page_listed")
-    games = rows[0].payload["data"]["games"]
+    assert len(rows) == 20
+    assert {row.payload["type"] for row in rows} == {_settings().event_name("game_listed")}
+    games = [row.payload["data"]["game"] for row in rows]
     assert len(games) == 20
-    assert [game["position"] for game in games] == list(range(20))
+    assert sorted(game["position"] for game in games) == list(range(20))
+    daily = await IngestionRepository(session).list_daily_processed_slugs(PROCESS_DATE)
+    assert daily == ()
 
 
 async def test_browse_keeps_full_page_not_capped_at_twenty(
@@ -226,11 +227,12 @@ async def test_browse_keeps_full_page_not_capped_at_twenty(
     port = _port(browse={1: _listing(24, source="browse", page=1)})
     handler = DiscoveryHandler(_settings(), port)
     loop, _, _ = _loop(session_factory, handler)
-    await loop.process_record(_record(_run_event(event_id="run-browse-24", source="browse", page=1)))
+    await loop.process_record(
+        _record(_run_event(event_id="run-browse-24", source="browse", page=1))
+    )
     _see_committed(session)
     rows = await OutboxRepository(session).claim("discovery", limit=50)
-    assert len(rows) == 1
-    games = rows[0].payload["data"]["games"]
+    games = [row.payload["data"]["game"] for row in rows]
     assert len(games) == 24
     browse_calls = [call for call in port.calls if call[0] == "list_browse_page"]
     assert browse_calls[0][1].limit == _settings().discovery.browse_list_limit
@@ -389,6 +391,24 @@ async def test_empty_and_all_seen_advance_cursor(
     assert run.discovered_count == 0
 
 
+async def test_empty_browse_listing_fails_without_advancing_cursor(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+) -> None:
+    await _seed_run(session, source="browse", page=1)
+    port = _port(browse={1: GameListing(items=[], source="browse", page=1)})
+    handler = DiscoveryHandler(_settings(), port)
+    loop, _, _ = _loop(session_factory, handler)
+    event = _run_event(event_id="run-empty-browse", source="browse", page=1)
+    await loop.process_record(_record(event))
+    _see_committed(session)
+    assert await IngestionRepository(session).get_cursor(PROCESS_DATE) is None
+    run = await IngestionRepository(session).get_run(RUN_ID)
+    assert run is not None
+    assert run.status is IngestionRunStatus.failed
+    assert await OutboxRepository(session).claim("discovery", limit=10) == ()
+
+
 async def test_empty_listing_advances_cursor(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
@@ -425,8 +445,9 @@ async def test_idempotent_replay_does_not_duplicate_discovered(
     await loop.process_record(second)
     _see_committed(session)
     rows = await OutboxRepository(session).claim("discovery", limit=20)
-    assert len(rows) == 1
-    assert len(rows[0].payload["data"]["games"]) == 4
+    assert len(rows) == 4
+    slugs = {row.payload["data"]["game"]["metacritic_slug"] for row in rows}
+    assert slugs == {f"game-{i:02d}" for i in range(4)}
     list_calls = [call for call in port.calls if call[0] == "list_new_releases"]
     assert len(list_calls) == 1
     assert consumer.committed[(second.topic, 0)] == 2
@@ -459,8 +480,9 @@ async def test_crash_before_persist_retries_listing(
     assert games is not None
     assert consumer.committed[(record.topic, 0)] == 1
     rows = await OutboxRepository(session).claim("discovery", limit=10)
-    assert len(rows) == 1
-    assert len(rows[0].payload["data"]["games"]) == 2
+    assert len(rows) == 2
+    slugs = {row.payload["data"]["game"]["metacritic_slug"] for row in rows}
+    assert slugs == {"game-00", "game-01"}
 
 
 def test_discovery_does_not_import_catalog_worker() -> None:

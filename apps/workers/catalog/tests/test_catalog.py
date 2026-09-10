@@ -14,7 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from games_intel.adapters.media.storage import FilesystemCoverStorage
 from games_intel.adapters.metacritic.exceptions import MetacriticAdapterError
 from games_intel.adapters.metacritic.in_process import InProcessMetacriticAdapter
-from games_intel.contracts import GamesPageListed, ListedGame, build_cloud_event
+from games_intel.contracts import GameListed, ListedGame, build_cloud_event
 from games_intel.contracts.adapters import GameDetails, GetGameInput
 from games_intel.contracts.envelope import CloudEvent
 from games_intel.contracts.payloads import PlatformScore
@@ -86,45 +86,33 @@ def _details(
     )
 
 
-def _page(
+def _listed(
     *,
     event_id: str,
     run_id: UUID = RUN_ID,
     slug: str = SLUG,
     title: str = "Elden Ring",
-    extra: list[tuple[str, str]] | None = None,
+    position: int = 0,
     settings: Settings | None = None,
 ) -> CloudEvent[Any]:
     loaded = settings if settings is not None else Settings()
-    games = [
-        ListedGame(
-            metacritic_slug=slug,
-            title=title,
-            listing_url=HttpUrl(f"https://www.metacritic.com/game/{slug}/"),
-            position=0,
-        )
-    ]
-    for index, (extra_slug, extra_title) in enumerate(extra or (), start=1):
-        games.append(
-            ListedGame(
-                metacritic_slug=extra_slug,
-                title=extra_title,
-                listing_url=HttpUrl(f"https://www.metacritic.com/game/{extra_slug}/"),
-                position=index,
-            )
-        )
-    data = GamesPageListed(
+    data = GameListed(
         run_id=run_id,
         process_date=PROCESS_DATE,
         source="new_releases",
         page=None,
-        games=games,
+        game=ListedGame(
+            metacritic_slug=slug,
+            title=title,
+            listing_url=HttpUrl(f"https://www.metacritic.com/game/{slug}/"),
+            position=position,
+        ),
     )
     return build_cloud_event(
         loaded,
         loaded.catalog.subscribe_event,
         source=worker_source(loaded, "discovery"),
-        subject=str(run_id),
+        subject=slug,
         data=data,
         stage="discovered",
         run_id=run_id,
@@ -248,7 +236,7 @@ async def test_fake_get_game_persists_catalog_slice(
     port = InProcessMetacriticAdapter(games={SLUG: _details()})
     handler, settings, covers = _handler(tmp_path, port)
     loop, _, _ = _loop(session_factory, handler, settings)
-    await loop.process_record(_record(_page(event_id="cat-happy", settings=settings), settings))
+    await loop.process_record(_record(_listed(event_id="cat-happy", settings=settings), settings))
     _see_committed(session)
     game = await GameCatalogRepository(session).get_by_slug(SLUG)
     assert game is not None
@@ -283,6 +271,8 @@ async def test_fake_get_game_persists_catalog_slice(
     item = await IngestionRepository(session).get_item(RUN_ID, SLUG, IngestionStage.cataloged)
     assert item is not None
     assert item.status is IngestionItemStatus.completed
+    daily = await IngestionRepository(session).list_daily_processed_slugs(PROCESS_DATE)
+    assert SLUG in daily
     discovered = await IngestionRepository(session).get_item(
         RUN_ID, SLUG, IngestionStage.discovered
     )
@@ -290,40 +280,34 @@ async def test_fake_get_game_persists_catalog_slice(
     assert discovered.status is IngestionItemStatus.completed
 
 
-async def test_page_of_two_games_is_one_task_two_cataloged_events(
+async def test_two_listed_games_are_two_cataloged_events(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
 ) -> None:
     second = "sekiro"
-    await _seed(session)
-    catalog = GameCatalogRepository(session)
-    game_id, _ = await catalog.ensure_game_stub(
-        metacritic_slug=second,
-        title="Sekiro",
-        listing_url=f"https://www.metacritic.com/game/{second}/",
-    )
-    await IngestionRepository(session).upsert_item(
-        run_id=RUN_ID,
-        metacritic_slug=second,
-        process_date=PROCESS_DATE,
-        stage=IngestionStage.discovered,
-        status=IngestionItemStatus.completed,
-        game_id=game_id,
-        event_id="discovered-seed-2",
-    )
-    await session.commit()
+    await _seed(session, extra=[(second, "Sekiro")])
     port = InProcessMetacriticAdapter(
         games={SLUG: _details(), second: _details(slug=second, title="Sekiro")}
     )
     handler, settings, _covers = _handler(tmp_path, port)
     loop, _, _ = _loop(session_factory, handler, settings)
-    event = _page(
-        event_id="cat-page-two",
-        extra=[(second, "Sekiro")],
-        settings=settings,
+    await loop.process_record(
+        _record(_listed(event_id="cat-listed-a", settings=settings), settings, offset=0)
     )
-    await loop.process_record(_record(event, settings))
+    await loop.process_record(
+        _record(
+            _listed(
+                event_id="cat-listed-b",
+                slug=second,
+                title="Sekiro",
+                position=1,
+                settings=settings,
+            ),
+            settings,
+            offset=1,
+        )
+    )
     _see_committed(session)
     rows = await OutboxRepository(session).claim("catalog", limit=10)
     assert len(rows) == 2
@@ -349,7 +333,7 @@ async def test_catalog_does_not_clobber_critic_summary(
     port = InProcessMetacriticAdapter(games={SLUG: _details()})
     handler, settings, _covers = _handler(tmp_path, port)
     loop, _, _ = _loop(session_factory, handler, settings)
-    await loop.process_record(_record(_page(event_id="cat-reviews", settings=settings), settings))
+    await loop.process_record(_record(_listed(event_id="cat-reviews", settings=settings), settings))
     _see_committed(session)
     game = await GameCatalogRepository(session).get_by_slug(SLUG)
     assert game is not None
@@ -369,7 +353,7 @@ async def test_404_fails_item_without_retry_or_dlq(
     )
     handler, settings, _covers = _handler(tmp_path, port)
     loop, broker, consumer = _loop(session_factory, handler, settings)
-    record = _record(_page(event_id="cat-404", settings=settings), settings)
+    record = _record(_listed(event_id="cat-404", settings=settings), settings)
     await loop.process_record(record)
     get_calls = [call for call in port.calls if call[0] == "get_game"]
     assert len(get_calls) == 1
@@ -392,9 +376,11 @@ async def test_404_fails_item_without_retry_or_dlq(
         settings.event_name("dlq") not in broker.topics
         or not broker.topics[settings.event_name("dlq")]
     )
+    daily = await IngestionRepository(session).list_daily_processed_slugs(PROCESS_DATE)
+    assert SLUG in daily
 
 
-async def test_timeout_fails_card_without_page_retry(
+async def test_timeout_retries_then_catalogs(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
@@ -403,49 +389,60 @@ async def test_timeout_fails_card_without_page_retry(
     port = _FlakyPort(_details(), fail_times=2)
     handler, settings, _covers = _handler(tmp_path, port)
     loop, _, consumer = _loop(session_factory, handler, settings)
-    record = _record(_page(event_id="cat-timeout", settings=settings), settings)
+    record = _record(_listed(event_id="cat-timeout", settings=settings), settings)
     await loop.process_record(record)
-    assert port.attempts == 1
+    assert port.attempts == 3
     _see_committed(session)
     item = await IngestionRepository(session).get_item(RUN_ID, SLUG, IngestionStage.cataloged)
     assert item is not None
-    assert item.status is IngestionItemStatus.failed
-    assert item.error_type == "TransientError"
+    assert item.status is IngestionItemStatus.completed
     assert consumer.committed[(record.topic, 0)] == 1
-    assert await OutboxRepository(session).claim("catalog", limit=10) == ()
+    rows = await OutboxRepository(session).claim("catalog", limit=10)
+    assert len(rows) == 1
 
 
-async def test_timeout_fail_fast_marks_remaining_cards_failed(
+async def test_timeout_on_one_game_does_not_fail_another(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
 ) -> None:
-    extra = ("sekiro", "Sekiro")
-    await _seed(session, extra=[extra])
-    port = _FlakyPort(_details(), fail_times=10)
+    second = "sekiro"
+    await _seed(session, extra=[(second, "Sekiro")])
+    port = _FailSlugPort(
+        {SLUG: _details(), second: _details(slug=second, title="Sekiro")},
+        fail_slug=SLUG,
+    )
     handler, settings, _covers = _handler(tmp_path, port)
     loop, _, consumer = _loop(session_factory, handler, settings)
-    record = _record(
-        _page(event_id="cat-timeout-batch", extra=[extra], settings=settings),
+    first = _record(_listed(event_id="cat-timeout-a", settings=settings), settings, offset=0)
+    second_record = _record(
+        _listed(
+            event_id="cat-timeout-b",
+            slug=second,
+            title="Sekiro",
+            position=1,
+            settings=settings,
+        ),
         settings,
+        offset=1,
     )
-    await loop.process_record(record)
-    assert port.attempts == 1
+    await loop.process_record(first)
+    await loop.process_record(second_record)
     _see_committed(session)
     ingestion = IngestionRepository(session)
-    first = await ingestion.get_item(RUN_ID, SLUG, IngestionStage.cataloged)
-    second = await ingestion.get_item(RUN_ID, "sekiro", IngestionStage.cataloged)
+    failed = await ingestion.get_item(RUN_ID, SLUG, IngestionStage.cataloged)
+    ok = await ingestion.get_item(RUN_ID, second, IngestionStage.cataloged)
     bogus = await ingestion.get_item(RUN_ID, str(RUN_ID), IngestionStage.cataloged)
-    assert first is not None and first.status is IngestionItemStatus.failed
-    assert second is not None and second.status is IngestionItemStatus.failed
-    assert first.error_type == "TransientError"
-    assert second.error_type == "TransientError"
+    assert failed is not None and failed.status is IngestionItemStatus.failed
+    assert failed.error_type == "TransientError"
+    assert ok is not None and ok.status is IngestionItemStatus.completed
     assert bogus is None
-    assert consumer.committed[(record.topic, 0)] == 1
-    assert await OutboxRepository(session).claim("catalog", limit=10) == ()
+    assert consumer.committed[(first.topic, 0)] == 2
+    rows = await OutboxRepository(session).claim("catalog", limit=10)
+    assert {row.payload["data"]["metacritic_slug"] for row in rows} == {second}
 
 
-async def test_kill_during_catalog_get_fails_card(
+async def test_kill_during_catalog_get_retries_from_warm_cache(
     session: AsyncSession,
     session_factory: async_sessionmaker[AsyncSession],
     tmp_path: Path,
@@ -454,19 +451,18 @@ async def test_kill_during_catalog_get_fails_card(
     port = _CacheThenCrashPort(_details())
     handler, settings, _covers = _handler(tmp_path, port)
     loop, _, consumer = _loop(session_factory, handler, settings)
-    record = _record(_page(event_id="cat-cache-kill", settings=settings), settings)
+    record = _record(_listed(event_id="cat-cache-kill", settings=settings), settings)
     await loop.process_record(record)
     assert port.fetches == 1
-    assert port.cache_hits == 0
+    assert port.cache_hits == 1
     _see_committed(session)
     item = await IngestionRepository(session).get_item(RUN_ID, SLUG, IngestionStage.cataloged)
     assert item is not None
-    assert item.status is IngestionItemStatus.failed
-    assert item.error_type == "TransientError"
+    assert item.status is IngestionItemStatus.completed
     assert consumer.committed[(record.topic, 0)] == 1
     game = await GameCatalogRepository(session).get_by_slug(SLUG)
     assert game is not None
-    assert game.publisher is None
+    assert game.publisher == "Bandai Namco"
 
 
 async def test_missing_optional_fields_complete_with_nulls(
@@ -479,7 +475,9 @@ async def test_missing_optional_fields_complete_with_nulls(
     port = InProcessMetacriticAdapter(games={SLUG: details})
     handler, settings, covers = _handler(tmp_path, port)
     loop, _, _ = _loop(session_factory, handler, settings)
-    await loop.process_record(_record(_page(event_id="cat-optional", settings=settings), settings))
+    await loop.process_record(
+        _record(_listed(event_id="cat-optional", settings=settings), settings)
+    )
     _see_committed(session)
     game = await GameCatalogRepository(session).get_by_slug(SLUG)
     assert game is not None
@@ -505,7 +503,9 @@ async def test_broken_cover_bytes_null_url_completed(
     port = InProcessMetacriticAdapter(games={SLUG: _details(cover_bytes=GARBAGE)})
     handler, settings, covers = _handler(tmp_path, port)
     loop, _, _ = _loop(session_factory, handler, settings)
-    await loop.process_record(_record(_page(event_id="cat-bad-cover", settings=settings), settings))
+    await loop.process_record(
+        _record(_listed(event_id="cat-bad-cover", settings=settings), settings)
+    )
     _see_committed(session)
     game = await GameCatalogRepository(session).get_by_slug(SLUG)
     assert game is not None
@@ -525,7 +525,7 @@ async def test_replay_discovered_is_catalog_noop(
     port = InProcessMetacriticAdapter(games={SLUG: _details()})
     handler, settings, _covers = _handler(tmp_path, port)
     loop, _, consumer = _loop(session_factory, handler, settings)
-    event = _page(event_id="cat-idem", settings=settings)
+    event = _listed(event_id="cat-idem", settings=settings)
     await loop.process_record(_record(event, settings, offset=0))
     await loop.process_record(_record(event, settings, offset=1))
     get_calls = [call for call in port.calls if call[0] == "get_game"]
@@ -533,7 +533,7 @@ async def test_replay_discovered_is_catalog_noop(
     _see_committed(session)
     rows = await OutboxRepository(session).claim("catalog", limit=10)
     assert len(rows) == 1
-    assert consumer.committed[(settings.event_name("page_listed"), 0)] == 2
+    assert consumer.committed[(settings.event_name("game_listed"), 0)] == 2
 
 
 async def test_two_replicas_one_persist(
@@ -547,7 +547,7 @@ async def test_two_replicas_one_persist(
     handler_b, settings_b, _c2 = _handler(tmp_path, port, instance_id="catalog-b")
     loop_a, _, _ = _loop(session_factory, handler_a, settings_a, instance_id="catalog-a")
     loop_b, _, _ = _loop(session_factory, handler_b, settings_b, instance_id="catalog-b")
-    event = _page(event_id="cat-replica", settings=settings_a)
+    event = _listed(event_id="cat-replica", settings=settings_a)
     await asyncio.gather(
         loop_a.process_record(_record(event, settings_a, offset=0)),
         loop_b.process_record(_record(event, settings_b, offset=1)),
@@ -579,7 +579,7 @@ async def test_platforms_replace_atomic_on_new_run(
     port = InProcessMetacriticAdapter(games={SLUG: first})
     handler, settings, _covers = _handler(tmp_path, port)
     loop, _, _ = _loop(session_factory, handler, settings)
-    await loop.process_record(_record(_page(event_id="cat-p1", settings=settings), settings))
+    await loop.process_record(_record(_listed(event_id="cat-p1", settings=settings), settings))
     await IngestionRepository(session).create_run(
         process_date=PROCESS_DATE,
         source="browse",
@@ -593,7 +593,7 @@ async def test_platforms_replace_atomic_on_new_run(
     port._games[SLUG] = _details(
         platforms=[PlatformScore(platform_code="ns2", metascore=91, userscore=8.2)]
     )
-    event2 = _page(event_id="cat-p2", run_id=RUN_ID_2, settings=settings)
+    event2 = _listed(event_id="cat-p2", run_id=RUN_ID_2, settings=settings)
     await loop.process_record(_record(event2, settings, offset=2))
     _see_committed(session)
     game = await GameCatalogRepository(session).get_by_slug(SLUG)
@@ -605,11 +605,11 @@ async def test_platforms_replace_atomic_on_new_run(
 
 async def test_catalog_topics_and_group_come_from_settings(tmp_path: Path) -> None:
     settings = _settings(tmp_path)
-    assert settings.catalog.subscribe_event == "page_listed"
+    assert settings.catalog.subscribe_event == "game_listed"
     assert settings.catalog.publish_event == "game_cataloged"
     assert settings.catalog.stage_name == "cataloged"
     assert settings.consumer_group_id(settings.catalog.consumer_group) == "games-intel.catalog"
-    assert settings.event_name(settings.catalog.subscribe_event) == "games.page.listed"
+    assert settings.event_name(settings.catalog.subscribe_event) == "game.listed"
     assert settings.event_name(settings.catalog.publish_event) == "game.cataloged"
 
 
@@ -641,6 +641,17 @@ class _FlakyPort(InProcessMetacriticAdapter):
     async def get_game(self, inp: GetGameInput) -> GameDetails:
         self.attempts += 1
         if self.attempts <= self._fail_times:
+            raise MetacriticAdapterError("timeout", "transient")
+        return await super().get_game(inp)
+
+
+class _FailSlugPort(InProcessMetacriticAdapter):
+    def __init__(self, games: dict[str, GameDetails], *, fail_slug: str) -> None:
+        super().__init__(games=games)
+        self._fail_slug = fail_slug
+
+    async def get_game(self, inp: GetGameInput) -> GameDetails:
+        if inp.slug == self._fail_slug:
             raise MetacriticAdapterError("timeout", "transient")
         return await super().get_game(inp)
 

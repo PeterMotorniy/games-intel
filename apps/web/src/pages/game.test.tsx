@@ -18,6 +18,8 @@ const CARD: GameCard = {
   video_url: "https://www.youtube.com/watch?v=E3Huy2cdih0",
   genres: ["Action", "RPG"],
   release_date: "2022-02-25",
+  metascore: 96,
+  userscore: 7.8,
   platforms: [{ platform_code: "ps5", metascore: 96, userscore: 7.8 }],
   critic: { likes: ["combat"], dislikes: ["performance"], summary: "Great combat." },
   user: { likes: ["exploration"], dislikes: ["difficulty"], summary: "Harsh but fair." },
@@ -96,6 +98,9 @@ describe("GamePage", () => {
       "href",
       "https://www.metacritic.com/game/elden-ring/",
     );
+    expect(screen.getByLabelText("Overall scores")).toBeInTheDocument();
+    expect(screen.getByLabelText("Overall Metascore 96")).toBeInTheDocument();
+    expect(screen.getByLabelText("Overall Userscore 7.8")).toBeInTheDocument();
   });
 
   it("shows an empty video graphic when video_url is null", async () => {

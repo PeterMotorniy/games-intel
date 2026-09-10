@@ -381,8 +381,8 @@ async def test_stt_on_uses_audio_then_analyst(
     await loop.process_record(_record(_discovered(event_id="lp-stt", settings=settings), settings))
     assert len(youtube.audio_calls) == 1
     assert isinstance(youtube.audio_calls[0], GetAudioInput)
-    assert youtube.audio_calls[0].max_duration_seconds == (
-        settings.letsplay.max_video_duration_seconds
+    assert (
+        youtube.audio_calls[0].max_duration_seconds == settings.letsplay.max_video_duration_seconds
     )
     assert transcription.calls[0].audio_ref == "file://clip.wav"
     assert analyst.calls[0].transcript_excerpt == "from stt"

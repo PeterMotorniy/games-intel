@@ -114,6 +114,17 @@
             "title": "Metacritic Slug",
             "type": "string"
           },
+          "metascore": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Metascore"
+          },
           "platforms": {
             "items": {
               "$ref": "#/components/schemas/PlatformScore"
@@ -164,6 +175,17 @@
                 "type": "null"
               }
             ]
+          },
+          "userscore": {
+            "anyOf": [
+              {
+                "type": "number"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Userscore"
           },
           "video_url": {
             "anyOf": [

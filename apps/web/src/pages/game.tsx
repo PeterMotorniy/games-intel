@@ -69,7 +69,25 @@ export function GamePage() {
           className="game-hero__cover"
         />
         <div className="game-hero__meta">
-          <h1>{title}</h1>
+          <div className="game-hero__heading">
+            <h1>{title}</h1>
+            <div className="game-hero__scores" aria-label="Overall scores">
+              <ScoreBadge
+                value={game.metascore}
+                kind="meta"
+                label="Overall Metascore"
+                collection={catalog}
+                size="hero"
+              />
+              <ScoreBadge
+                value={game.userscore}
+                kind="user"
+                label="Overall Userscore"
+                collection={catalog}
+                size="hero"
+              />
+            </div>
+          </div>
           <div className="game-hero__pills">
             <MetacriticLink slug={game.metacritic_slug} />
           </div>

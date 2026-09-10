@@ -90,18 +90,13 @@ Canonical non-secret settings: [`config.example.yaml`](config.example.yaml). Pat
 
 ### Public HTTPS URL (optional)
 
-If you need to share the UI for a few days, overlay [localhost.run](https://localhost.run) SSH (works with VPN; Cloudflare Quick Tunnel often does not):
+From the repo root, with the stack already on port 8080:
 
-```bash
-docker compose --env-file .env -f infra/compose/compose.yaml -f infra/compose/compose.tunnel.yaml up -d --build tunnel
-docker compose --env-file .env -f infra/compose/compose.yaml -f infra/compose/compose.tunnel.yaml logs -f tunnel
+```powershell
+.\start-tunnel.ps1
 ```
 
-The log prints `https://….lhr.life`. Only the UI (`web:80`) is exposed. The URL changes on container restart. Keep the machine awake.
-
-```bash
-docker compose --env-file .env -f infra/compose/compose.yaml -f infra/compose/compose.tunnel.yaml stop tunnel
-```
+The script prints `https://….lhr.life`. Leave that window open. Ctrl+C stops the tunnel. The URL changes each run.
 
 ### Production overlay
 

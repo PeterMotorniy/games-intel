@@ -1,4 +1,5 @@
 from games_intel.db.engine import (
+    assert_embedding_dimension,
     async_database_url,
     create_engine,
     create_session_factory,
@@ -77,6 +78,7 @@ __all__ = [
     "SimilarGamesRepository",
     "SimilarNeighbor",
     "SortOrder",
+    "assert_embedding_dimension",
     "async_database_url",
     "create_engine",
     "create_session_factory",

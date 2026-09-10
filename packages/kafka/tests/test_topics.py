@@ -14,6 +14,7 @@ def test_game_topics_have_at_least_six_partitions() -> None:
     assert control
     assert all(spec.partitions >= 6 for spec in game)
     assert {spec.event_key for spec in game} == {
+        "game_listed",
         "game_cataloged",
         "game_reviews_summarized",
         "game_letsplay_analyzed",
@@ -31,6 +32,7 @@ def test_topic_prefix_applied_to_specs(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setenv("GAMES_INTEL__KAFKA__TOPIC_PREFIX", "local.")
     settings = load_settings()
     names = {spec.name for spec in topic_specs(settings)}
+    assert "local.game.listed" in names
     assert "local.games.page.listed" in names
     assert "local.ingestion.dlq" in names
     assert "games.page.listed" not in names

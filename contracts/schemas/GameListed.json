@@ -1,0 +1,82 @@
+{
+  "$defs": {
+    "ListedGame": {
+      "additionalProperties": false,
+      "properties": {
+        "listing_url": {
+          "format": "uri",
+          "maxLength": 2083,
+          "minLength": 1,
+          "title": "Listing Url",
+          "type": "string"
+        },
+        "metacritic_slug": {
+          "title": "Metacritic Slug",
+          "type": "string"
+        },
+        "position": {
+          "minimum": 0,
+          "title": "Position",
+          "type": "integer"
+        },
+        "title": {
+          "title": "Title",
+          "type": "string"
+        }
+      },
+      "required": [
+        "metacritic_slug",
+        "title",
+        "listing_url",
+        "position"
+      ],
+      "title": "ListedGame",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "description": "One discovered game for CatalogWorker. Partition key is the slug.",
+  "properties": {
+    "game": {
+      "$ref": "#/$defs/ListedGame"
+    },
+    "page": {
+      "anyOf": [
+        {
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Page"
+    },
+    "process_date": {
+      "format": "date",
+      "title": "Process Date",
+      "type": "string"
+    },
+    "run_id": {
+      "format": "uuid",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "source": {
+      "enum": [
+        "new_releases",
+        "browse"
+      ],
+      "title": "Source",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "process_date",
+    "source",
+    "game"
+  ],
+  "title": "GameListed",
+  "type": "object"
+}

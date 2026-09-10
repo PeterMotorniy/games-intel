@@ -117,8 +117,7 @@ def test_catalog_replicas_share_group_and_use_hostname() -> None:
     assert "GAMES_INTEL__CATALOG__INSTANCE_ID" not in text
     assert "GAMES_INTEL__KAFKA__CONSUMER_GROUPS__CATALOG" not in text
     services = _services()
-    deploy = _mapping(services["catalog"]["deploy"])
-    assert int(deploy["replicas"]) >= 2
+    assert "deploy" not in services["catalog"]
     assert "catalog-replica" in services
     example = yaml.safe_load(EXAMPLE_YAML.read_text(encoding="utf-8"))
     partitions = int(example["kafka"]["partitions"]["game_events"])
@@ -130,6 +129,8 @@ def test_example_yaml_metacritic_markers_cover_odyssey() -> None:
     meta = example["adapters"]["metacritic"]
     assert "product-hero" in meta["markers"]["card_container"]
     assert "new-game-release-carousel" in meta["markers"]["listing_container"]
+    assert "filter-results" not in meta["markers"]["listing_container"]
+    assert "filter-results" in meta["markers"]["browse_listing_container"]
 
 
 def test_daemon_images_do_not_install_langchain() -> None:

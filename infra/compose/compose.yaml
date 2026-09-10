@@ -220,8 +220,6 @@ services:
     build:
       <<: *daemon-build
     command: ["python", "-m", "games_intel.workers.catalog"]
-    deploy:
-      replicas: 2
 
   catalog-replica:
     <<: *worker-common
@@ -255,8 +253,6 @@ services:
     command: ["python", "-m", "games_intel.workers.letsplay"]
     depends_on:
       <<: *infra-deps
-      scrape-metacritic:
-        condition: service_healthy
 
   similarity:
     <<: *worker-common
@@ -269,8 +265,6 @@ services:
     command: ["python", "-m", "games_intel.workers.similarity"]
     depends_on:
       <<: *infra-deps
-      scrape-metacritic:
-        condition: service_healthy
 
   api:
     init: true

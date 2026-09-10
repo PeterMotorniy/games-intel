@@ -116,7 +116,7 @@ export function ListPage() {
         <PlatformFilter
           value={platform}
           platforms={platformsQuery.data?.items ?? []}
-          disabled={platformsQuery.isPending}
+          disabled={platformsQuery.isPending || platformsQuery.isError}
           onChange={(value) => patchParams({ platform: value })}
         />
         <fieldset className="chip-field">
@@ -143,6 +143,15 @@ export function ListPage() {
           </div>
         </fieldset>
       </form>
+
+      {platformsQuery.isError ? (
+        <PageState
+          kind="error"
+          title="Could not load platforms"
+          detail={platformsQuery.error instanceof Error ? platformsQuery.error.message : null}
+          onRetry={() => void platformsQuery.refetch()}
+        />
+      ) : null}
 
       <div aria-busy={gamesQuery.isPending} aria-live="polite">
         {gamesQuery.isPending ? (

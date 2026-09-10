@@ -11,6 +11,7 @@ from games_intel.settings import Settings, load_settings
 
 GAME_EVENT_KEYS: frozenset[str] = frozenset(
     {
+        "game_listed",
         "game_cataloged",
         "game_reviews_summarized",
         "game_letsplay_analyzed",

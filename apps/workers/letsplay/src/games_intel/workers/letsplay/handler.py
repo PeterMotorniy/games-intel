@@ -114,7 +114,8 @@ class LetsPlayHandler:
                 conclusion=None,
             )
         excerpt = clip_transcript(text, self.settings.letsplay.transcript_max_chars)
-        assert hit is not None
+        if hit is None:
+            raise TransientError("letsplay transcript prepared without a video hit")
         try:
             conclusion = await self.analyst.ainvoke(
                 LetsPlayAnalystInput(

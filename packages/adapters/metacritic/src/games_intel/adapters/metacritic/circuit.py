@@ -36,6 +36,7 @@ class CircuitBreaker:
         self._fail_threshold = fail_threshold
         self._open_seconds = open_seconds
         self._clock = clock if clock is not None else SystemClock()
+        self._half_open_probe = False
         self._snapshot = initial or CircuitSnapshot(state="closed")
 
     @property
@@ -51,25 +52,41 @@ class CircuitBreaker:
         if self._snapshot.state == "closed":
             return True
         if self._snapshot.state == "half_open":
+            if self._half_open_probe:
+                return False
+            self._half_open_probe = True
             return True
         opened_at = self._snapshot.opened_at
         if opened_at is None:
             return False
         if self._clock.now() - opened_at >= timedelta(seconds=self._open_seconds):
             self._snapshot.state = "half_open"
+            self._half_open_probe = True
             return True
         return False
 
     def record_success(self) -> CircuitSnapshot:
+        self._half_open_probe = False
         self._snapshot.state = "closed"
         self._snapshot.parse_error_streak = 0
         self._snapshot.opened_at = None
+        return self.snapshot
+
+    def record_failure(self) -> CircuitSnapshot:
+        """Timeout / unavailable / rate-limit in half-open re-opens; closed stays closed."""
+        now = self._clock.now()
+        if self._snapshot.state == "half_open":
+            self._half_open_probe = False
+            self._snapshot.state = "open"
+            self._snapshot.opened_at = now
+            return self.snapshot
         return self.snapshot
 
     def record_parse_error(self) -> CircuitSnapshot:
         now = self._clock.now()
         self._snapshot.last_parse_error_at = now
         if self._snapshot.state == "half_open":
+            self._half_open_probe = False
             self._snapshot.state = "open"
             self._snapshot.opened_at = now
             self._snapshot.parse_error_streak = max(self._snapshot.parse_error_streak, 1)

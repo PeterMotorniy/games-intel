@@ -6,7 +6,7 @@ from collections.abc import Awaitable, Callable
 from games_intel.adapters.stt.exceptions import SttAdapterError
 from games_intel.adapters.stt.factory import create_stt_port
 from games_intel.adapters.stt.port import SttPort
-from games_intel.agents.transcription.checkpoint import build_thread_id
+from games_intel.agents.transcription.checkpoint import build_thread_id, input_digest
 from games_intel.agents.transcription.exceptions import SttFailedError
 from games_intel.agents.transcription.tracing import safe_tracing_span
 from games_intel.contracts.adapters import TranscribeInput
@@ -35,7 +35,8 @@ class Transcription:
         self._sleep: SleepFn = sleep if sleep is not None else asyncio.sleep
 
     async def ainvoke(self, inp: TranscriptionInput) -> TranscriptionOutput:
-        thread_id = build_thread_id(inp.run_id, inp.metacritic_slug)
+        digest = input_digest(inp.audio_ref)
+        thread_id = build_thread_id(inp.run_id, inp.metacritic_slug, digest)
         with safe_tracing_span(self.settings, thread_id=thread_id):
             result = await self._transcribe_with_retry(inp.audio_ref)
         return TranscriptionOutput(text=result.text, language=result.language)

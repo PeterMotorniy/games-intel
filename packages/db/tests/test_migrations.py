@@ -3,8 +3,10 @@ from __future__ import annotations
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncEngine
 
+from games_intel.db.engine import assert_embedding_dimension
 from games_intel.db.migrate import downgrade_base, upgrade_head
 from games_intel.db.models import VECTOR_DIM
+from games_intel.settings import Settings
 
 EXPECTED_TABLES = {
     "games",
@@ -56,21 +58,8 @@ async def test_alembic_upgrade_creates_schema(engine: AsyncEngine) -> None:
 
 
 async def test_vector_dimension_matches_orm(engine: AsyncEngine) -> None:
-    expected = VECTOR_DIM
-    async with engine.connect() as connection:
-        formatted = (
-            await connection.execute(
-                text(
-                    "SELECT format_type(a.atttypid, a.atttypmod) "
-                    "FROM pg_attribute a "
-                    "JOIN pg_class c ON c.oid = a.attrelid "
-                    "JOIN pg_namespace n ON n.oid = c.relnamespace "
-                    "WHERE n.nspname = 'public' AND c.relname = 'games' "
-                    "AND a.attname = 'embedding' AND a.attnum > 0"
-                )
-            )
-        ).scalar_one()
-    assert formatted == f"vector({expected})"
+    await assert_embedding_dimension(engine, VECTOR_DIM)
+    await assert_embedding_dimension(engine, Settings().embeddings.vector_dim)
 
 
 async def test_all_timestamps_are_timestamptz(engine: AsyncEngine) -> None:
@@ -90,7 +79,7 @@ async def test_all_timestamps_are_timestamptz(engine: AsyncEngine) -> None:
         assert data_type == "timestamp with time zone"
 
 
-async def test_no_hnsw_index_in_0001(engine: AsyncEngine) -> None:
+async def test_hnsw_index_exists_at_head(engine: AsyncEngine) -> None:
     async with engine.connect() as connection:
         indexes = (
             (
@@ -101,7 +90,7 @@ async def test_no_hnsw_index_in_0001(engine: AsyncEngine) -> None:
             .scalars()
             .all()
         )
-    assert all("hnsw" not in indexdef.lower() for indexdef in indexes)
+    assert any("hnsw" in indexdef.lower() for indexdef in indexes)
 
 
 async def test_no_langgraph_checkpoint_tables(engine: AsyncEngine) -> None:

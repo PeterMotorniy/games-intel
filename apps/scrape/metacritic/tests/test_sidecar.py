@@ -19,9 +19,11 @@ from games_intel.contracts.adapters import (
 from games_intel.scrape.metacritic.app import create_app
 from games_intel.scrape.metacritic.browser import (
     CRITIC_REVIEWS_CARD_WAIT_MS,
+    LISTING_CARD_WAIT_MS,
     REVIEWS_CARD_WAIT_MS,
     combined_marker_selector,
     is_reviews_url,
+    listing_wait_selector,
     reviews_item_selector,
 )
 from games_intel.scrape.metacritic.fetch import FetchResult, ScriptedFetcher
@@ -314,6 +316,22 @@ def test_combined_marker_selector_includes_odyssey_and_legacy() -> None:
     assert ".c-productHero" in selector
     assert "new-game-release-carousel" in selector
     assert ".c-pageProductHome" in selector
+    assert "filter-results" in selector
+
+
+def test_listing_wait_selector_uses_browse_container() -> None:
+    meta = Settings().adapters.metacritic
+    browse = listing_wait_selector(
+        meta, "https://www.metacritic.com/browse/game/all/all/all-time/new/?page=2"
+    )
+    home = listing_wait_selector(meta, "https://www.metacritic.com/game/")
+    card = listing_wait_selector(meta, "https://www.metacritic.com/game/elden-ring/")
+    assert "filter-results" in browse
+    assert "new-game-release-carousel" not in browse
+    assert "new-game-release-carousel" in home
+    assert "filter-results" not in home
+    assert "product-hero" in card
+    assert LISTING_CARD_WAIT_MS <= 10_000
 
 
 def test_reviews_url_and_item_selector() -> None:

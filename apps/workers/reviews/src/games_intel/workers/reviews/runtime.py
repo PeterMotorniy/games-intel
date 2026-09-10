@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
-from collections.abc import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -14,17 +12,13 @@ from games_intel.agents.review_summarizer import (
 )
 from games_intel.db.engine import create_engine, create_session_factory, is_database_ready
 from games_intel.kafka.consumer import KafkaConsumer
-from games_intel.kafka.daemon import DaemonConfig, DaemonLoop
+from games_intel.kafka.daemon import DaemonConfig
 from games_intel.kafka.producer import KafkaProducer
-from games_intel.kafka.ready import wait_until_backend_ready
-from games_intel.kafka.relay import OutboxRelay
+from games_intel.kafka.runtime import SleepFn, WorkerStack, build_worker_stack, run_worker_stack
 from games_intel.settings import Settings, load_settings
 from games_intel.workers.reviews.handler import ReviewsHandler
 
-logger = logging.getLogger("games_intel.workers.reviews")
-
 _WORKER_TYPE = "reviews"
-SleepFn = Callable[[float], Awaitable[None]]
 
 
 class ReviewsRuntime:
@@ -48,64 +42,43 @@ class ReviewsRuntime:
         self.agent = agent
         self.handler = handler or ReviewsHandler(settings, port, agent)
         self._sleep: SleepFn = sleep if sleep is not None else asyncio.sleep
-        instance_id = settings.reviews.instance_id
-        group_id = settings.consumer_group_id(settings.reviews.consumer_group)
-        topic = settings.event_name(settings.reviews.subscribe_event)
-        self.producer = producer or KafkaProducer(
-            settings, worker_type=_WORKER_TYPE, instance_id=instance_id
-        )
-        self.consumer = consumer or KafkaConsumer(
-            settings,
-            worker_type=_WORKER_TYPE,
-            instance_id=instance_id,
-            group_id=group_id,
-            topics=(topic,),
-        )
-        self.daemon = DaemonLoop(
+        stack = build_worker_stack(
             settings,
             DaemonConfig(
                 worker_type=_WORKER_TYPE,
-                instance_id=instance_id,
+                instance_id=settings.reviews.instance_id,
                 stage_name=settings.reviews.stage_name,
                 subscribe_event_key=settings.reviews.subscribe_event,
                 heartbeat_interval_seconds=settings.reviews.heartbeat_interval_seconds,
                 lease_seconds=settings.reviews.lease_seconds,
             ),
-            consumer=self.consumer,
-            producer=self.producer,
             session_factory=session_factory,
             handler=self.handler,
+            group_id=settings.consumer_group_id(settings.reviews.consumer_group),
+            topics=(settings.event_name(settings.reviews.subscribe_event),),
             sleep=self._sleep,
+            consumer=consumer,
+            producer=producer,
         )
-        self.relay = OutboxRelay(session_factory, self.producer, worker_type=_WORKER_TYPE)
+        self._stack: WorkerStack = stack
+        self.producer = stack.producer
+        self.consumer = stack.consumer
+        self.daemon = stack.daemon
+        self.relay = stack.relay
 
     async def ready(self) -> bool:
         return await is_database_ready(self.engine)
 
     async def run(self, stop: asyncio.Event) -> None:
-        if not await wait_until_backend_ready(
-            self.engine,
-            self.settings,
+        await run_worker_stack(
+            name="reviews",
+            engine=self.engine,
+            settings=self.settings,
+            stack=self._stack,
             sleep=self._sleep,
-            require_kafka=isinstance(self.producer, KafkaProducer),
-        ):
-            logger.error("reviews not ready: database or kafka unavailable")
-            msg = "reviews not ready: database or kafka unavailable"
-            raise RuntimeError(msg)
-        await self.producer.start()
-        try:
-            await asyncio.gather(self.daemon.run(stop), self._relay_loop(stop))
-        finally:
-            await self.producer.stop()
-            close = getattr(self.port, "aclose", None)
-            if close is not None:
-                await close()
-            agent_close = getattr(self.agent, "aclose", None)
-            if agent_close is not None:
-                await agent_close()
-
-    async def _relay_loop(self, stop: asyncio.Event) -> None:
-        await self.relay.run_loop(stop, self._sleep)
+            stop=stop,
+            closeables=(self.port, self.agent),
+        )
 
 
 def build_runtime(

@@ -70,6 +70,15 @@ class SimilarityHandler:
         self.embeddings = embeddings
         self._sessions = session_factory
 
+    async def should_claim(self, event: CloudEvent[Any]) -> bool:
+        data = event.data
+        if (
+            isinstance(data, GameReviewsSummarized)
+            and not self.settings.similarity.recompute_on_reviews
+        ):
+            return False
+        return True
+
     async def prepare(self, event: CloudEvent[Any]) -> _SimilarityPrepared:
         data = event.data
         if (

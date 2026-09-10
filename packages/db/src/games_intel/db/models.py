@@ -110,6 +110,8 @@ class SimilarGame(Base):
     __tablename__ = "similar_games"
     __table_args__ = (
         CheckConstraint("game_id <> similar_game_id", name="ck_similar_games_no_self"),
+        Index("ix_similar_games_similar_game_id", "similar_game_id"),
+        UniqueConstraint("game_id", "rank", name="uq_similar_games_game_rank"),
     )
 
     game_id: Mapped[UUID] = mapped_column(
@@ -187,6 +189,8 @@ class IngestionItem(Base):
             "stage IN ('discovered', 'cataloged', 'reviews', 'letsplay', 'similar')",
             name="ck_ingestion_items_stage",
         ),
+        Index("ix_ingestion_items_process_date", "process_date"),
+        Index("ix_ingestion_items_slug_stage_updated", "metacritic_slug", "stage", "updated_at"),
     )
 
     id: Mapped[UUID] = mapped_column(primary_key=True, default=uuid4)
@@ -202,6 +206,8 @@ class IngestionItem(Base):
     error_type: Mapped[str | None] = mapped_column(Text)
     error_message: Mapped[str | None] = mapped_column(Text)
     event_id: Mapped[str | None] = mapped_column(Text)
+    claimed_until: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claimed_by: Mapped[str | None] = mapped_column(Text)
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
@@ -236,6 +242,14 @@ class ProcessedEvent(Base):
 
 class Outbox(Base):
     __tablename__ = "outbox"
+    __table_args__ = (
+        Index(
+            "ix_outbox_unpublished_producer",
+            "producer",
+            "id",
+            postgresql_where=text("published_at IS NULL"),
+        ),
+    )
 
     id: Mapped[int] = mapped_column(BigInteger, Identity(), primary_key=True)
     producer: Mapped[str] = mapped_column(Text, nullable=False)
@@ -247,6 +261,9 @@ class Outbox(Base):
         DateTime(timezone=True), nullable=False, server_default=func.now()
     )
     published_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claimed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    claimed_by: Mapped[str | None] = mapped_column(Text)
+    claim_expires_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
 
 
 class WorkerHeartbeat(Base):

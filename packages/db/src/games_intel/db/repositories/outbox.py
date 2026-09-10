@@ -1,9 +1,9 @@
 from __future__ import annotations
 
 from collections.abc import Sequence
-from datetime import datetime
+from datetime import datetime, timedelta
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,7 +19,7 @@ class OutboxRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
-    async def insert(self, row: OutboxInsert) -> InsertResult:
+    async def insert(self, row: OutboxInsert) -> InsertResult[int]:
         stmt = (
             insert(Outbox)
             .values(
@@ -45,7 +45,7 @@ class OutboxRepository:
         topic: str,
         partition_key: str,
         payload: dict[str, object],
-    ) -> InsertResult:
+    ) -> InsertResult[int]:
         """Query API write: enqueue a schedule tick CloudEvent. No domain game writes."""
         return await self.insert(
             OutboxInsert(
@@ -57,15 +57,46 @@ class OutboxRepository:
             )
         )
 
-    async def claim(self, producer: str, *, limit: int = 10) -> tuple[OutboxRecord, ...]:
-        stmt = (
-            select(Outbox)
-            .where(Outbox.published_at.is_(None), Outbox.producer == producer)
+    async def claim(
+        self,
+        producer: str,
+        *,
+        limit: int = 10,
+        claimed_by: str | None = None,
+        lease_seconds: int = 30,
+    ) -> tuple[OutboxRecord, ...]:
+        owner = claimed_by or producer
+        now = utcnow()
+        expires = now + timedelta(seconds=max(lease_seconds, 1))
+        eligible = (
+            select(Outbox.id)
+            .where(
+                Outbox.published_at.is_(None),
+                Outbox.producer == producer,
+                or_(
+                    Outbox.claimed_at.is_(None),
+                    Outbox.claim_expires_at.is_(None),
+                    Outbox.claim_expires_at <= now,
+                    Outbox.claimed_by == owner,
+                ),
+            )
             .order_by(Outbox.id)
             .with_for_update(skip_locked=True)
             .limit(limit)
         )
-        rows = (await self._session.scalars(stmt)).all()
+        ids = (await self._session.scalars(eligible)).all()
+        if not ids:
+            return ()
+        await self._session.execute(
+            update(Outbox)
+            .where(Outbox.id.in_(list(ids)))
+            .values(claimed_at=now, claimed_by=owner, claim_expires_at=expires)
+        )
+        rows = (
+            await self._session.scalars(
+                select(Outbox).where(Outbox.id.in_(list(ids))).order_by(Outbox.id)
+            )
+        ).all()
         return tuple(outbox_record(row) for row in rows)
 
     async def mark_published(
@@ -75,5 +106,15 @@ class OutboxRepository:
             return
         when = published_at if published_at is not None else utcnow()
         await self._session.execute(
-            update(Outbox).where(Outbox.id.in_(list(outbox_ids))).values(published_at=when)
+            update(Outbox)
+            .where(Outbox.id.in_(list(outbox_ids)))
+            .values(published_at=when, claimed_at=None, claimed_by=None, claim_expires_at=None)
+        )
+
+    async def mark_published_by_key(self, idempotency_key: str) -> None:
+        when = utcnow()
+        await self._session.execute(
+            update(Outbox)
+            .where(Outbox.idempotency_key == idempotency_key, Outbox.published_at.is_(None))
+            .values(published_at=when, claimed_at=None, claimed_by=None, claim_expires_at=None)
         )

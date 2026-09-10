@@ -6,7 +6,7 @@ import logging
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass
 from datetime import UTC, date, datetime
-from typing import Any, Protocol
+from typing import Any, Protocol, runtime_checkable
 from uuid import UUID
 
 from sqlalchemy.exc import InterfaceError, OperationalError
@@ -16,7 +16,9 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from games_intel.contracts.builder import build_cloud_event
 from games_intel.contracts.envelope import CloudEvent
 from games_intel.contracts.payloads import DeadLetter, DeadLetterReason
+from games_intel.db.records import OutboxInsert
 from games_intel.db.repositories.ingestion import IngestionRepository
+from games_intel.db.repositories.outbox import OutboxRepository
 from games_intel.db.types import IngestionItemStatus, IngestionStage
 from games_intel.kafka.envelope import parse_cloud_event
 from games_intel.kafka.exceptions import (
@@ -33,7 +35,11 @@ from games_intel.kafka.logging import (
     sanitize_error_message,
 )
 from games_intel.kafka.retry import backoff_seconds
-from games_intel.kafka.serialization import cloud_event_headers, encode_cloud_event
+from games_intel.kafka.serialization import (
+    cloud_event_headers,
+    cloud_event_to_dict,
+    encode_cloud_event,
+)
 from games_intel.kafka.source import worker_source
 from games_intel.kafka.types import IncomingRecord, MessageConsumer, MessageProducer
 from games_intel.settings import Settings
@@ -45,8 +51,30 @@ _UNPREPARED = object()
 _TRANSIENT_DB = (OperationalError, InterfaceError, SATimeoutError, ConnectionError, TimeoutError)
 
 
+@runtime_checkable
 class EventHandler(Protocol):
     async def handle(self, event: CloudEvent[Any], session: AsyncSession) -> None: ...
+
+
+@runtime_checkable
+class ClaimFilter(Protocol):
+    async def should_claim(self, event: CloudEvent[Any]) -> bool: ...
+
+
+@runtime_checkable
+class PreparingHandler(Protocol):
+    async def prepare(self, event: CloudEvent[Any]) -> object: ...
+
+    async def persist(
+        self, event: CloudEvent[Any], session: AsyncSession, prepared: object
+    ) -> None: ...
+
+
+@runtime_checkable
+class TerminalFailureHandler(Protocol):
+    async def on_terminal_failure(
+        self, event: CloudEvent[Any], session: AsyncSession, exc: BaseException
+    ) -> None: ...
 
 
 @dataclass(frozen=True, slots=True)
@@ -217,6 +245,7 @@ class DaemonLoop:
             await self.consumer.commit(record)
             if not duplicate:
                 self.processed_ok += 1
+                self._clear_memory_attempts(event.id)
             await self._heartbeat("idle", None)
             return
 
@@ -224,7 +253,8 @@ class DaemonLoop:
         try:
             async with self._session_factory() as session:
                 async with session.begin():
-                    already = await IngestionRepository(session).has_processed_event(
+                    ingestion = IngestionRepository(session)
+                    already = await ingestion.has_processed_event(
                         worker_type=self.config.worker_type,
                         event_id=event.id,
                         idempotency_key=event.idempotencykey,
@@ -232,7 +262,13 @@ class DaemonLoop:
                     if already:
                         self._log(event, error_type=None, attempt=0, event_name="duplicate")
                         return True
-            prepared = await _prepare_handler(self.handler, event)
+                    if not await _should_claim(self.handler, event):
+                        claimed = True
+                    else:
+                        claimed = await self._claim_work(ingestion, event)
+                    if not claimed:
+                        raise TransientError("work leased by another replica")
+            prepared = await self._prepare_with_timeout(event)
             async with self._session_factory() as session:
                 async with session.begin():
                     ingestion = IngestionRepository(session)
@@ -246,24 +282,45 @@ class DaemonLoop:
                     if outcome.value == "duplicate":
                         self._log(event, error_type=None, attempt=0, event_name="duplicate")
                         return True
-                    stage = _stage_or_none(self.config.stage_name)
-                    run_id = _event_run_id(event)
-                    lease = self.config.lease_seconds
-                    if lease and stage is not None and run_id is not None:
-                        await ingestion.lock_item(
-                            run_id,
-                            event.subject,
-                            stage,
-                            lease_seconds=lease,
-                        )
                     await _invoke_handler(self.handler, event, session, prepared)
                     return False
         except _TRANSIENT_DB as exc:
             raise TransientError(str(exc)) from exc
 
+    async def _claim_work(self, ingestion: IngestionRepository, event: CloudEvent[Any]) -> bool:
+        lease = self.config.lease_seconds
+        stage = _stage_or_none(self.config.stage_name)
+        run_id = _event_run_id(event)
+        slugs = _item_slugs(event)
+        if not lease or stage is None or run_id is None or not slugs:
+            return True
+        process_date = await _resolve_process_date(event, ingestion)
+        if process_date is None:
+            return True
+        for slug in slugs:
+            ok = await ingestion.try_claim_item(
+                run_id=run_id,
+                metacritic_slug=slug,
+                process_date=process_date,
+                stage=stage,
+                instance_id=self.config.instance_id,
+                lease_seconds=lease,
+                event_id=event.id,
+            )
+            if not ok:
+                return False
+        return True
+
+    async def _prepare_with_timeout(self, event: CloudEvent[Any]) -> object:
+        timeout = max(float(self.settings.retry.prepare_timeout_seconds), 1.0)
+        try:
+            return await asyncio.wait_for(_prepare_handler(self.handler, event), timeout=timeout)
+        except TimeoutError as exc:
+            raise TransientError("prepare timed out") from exc
+
     async def _handle_schema_error(self, record: IncomingRecord, exc: SchemaError) -> None:
         original_id = _peek_event_id(record.value)
-        await self._produce_dlq(
+        await self._persist_and_publish_dlq(
             original_topic=record.topic,
             original_id=original_id,
             reason="schema",
@@ -317,6 +374,9 @@ class DaemonLoop:
         self._transient_attempts[event_id] = attempts
         return attempts
 
+    def _clear_memory_attempts(self, event_id: str) -> None:
+        self._transient_attempts.pop(event_id, None)
+
     async def _finalize_terminal(
         self,
         event: CloudEvent[Any],
@@ -328,6 +388,7 @@ class DaemonLoop:
     ) -> None:
         run_id = _event_run_id(event)
         stage = _stage_or_none(self.config.stage_name)
+        dlq_event = None
         async with self._session_factory() as session:
             async with session.begin():
                 ingestion = IngestionRepository(session)
@@ -353,18 +414,24 @@ class DaemonLoop:
                             error_message=sanitize_error_message(str(exc)),
                         )
                 await _call_terminal_failure(self.handler, event, session, exc)
+                if dlq_reason is not None:
+                    dlq_event = _build_dlq_event(
+                        self.settings,
+                        source=self.source,
+                        original_topic=original_topic or self.expected_type,
+                        original_id=event.id,
+                        reason=dlq_reason,
+                        error_type=type(exc).__name__,
+                        error_message=str(exc),
+                        run_id=run_id,
+                    )
+                    await _insert_dlq_outbox(session, self.config.worker_type, dlq_event)
         self._log(event, error_type=type(exc).__name__, attempt=None, event_name="terminal")
-        if dlq_reason is not None:
-            await self._produce_dlq(
-                original_topic=original_topic or self.expected_type,
-                original_id=event.id,
-                reason=dlq_reason,
-                error_type=type(exc).__name__,
-                error_message=str(exc),
-                run_id=run_id,
-            )
+        self._clear_memory_attempts(event.id)
+        if dlq_event is not None:
+            await self._publish_dlq_best_effort(dlq_event)
 
-    async def _produce_dlq(
+    async def _persist_and_publish_dlq(
         self,
         *,
         original_topic: str,
@@ -374,29 +441,52 @@ class DaemonLoop:
         error_message: str,
         run_id: UUID | None,
     ) -> None:
-        dead = DeadLetter(
+        event = _build_dlq_event(
+            self.settings,
+            source=self.source,
             original_topic=original_topic,
             original_id=original_id,
             reason=reason,
             error_type=error_type,
-            error_message=sanitize_error_message(error_message),
-            payload_truncated=True,
-        )
-        event = build_cloud_event(
-            self.settings,
-            "dlq",
-            source=self.source,
-            subject=original_id or original_topic,
-            data=dead,
-            stage="dlq",
+            error_message=error_message,
             run_id=run_id,
         )
-        await self.producer.send(
-            topic=self.settings.event_name("dlq"),
-            key=event.subject,
-            value=encode_cloud_event(event),
-            headers=cloud_event_headers(),
-        )
+        async with self._session_factory() as session:
+            async with session.begin():
+                await _insert_dlq_outbox(session, self.config.worker_type, event)
+        await self._publish_dlq_best_effort(event)
+
+    async def _publish_dlq_best_effort(self, event: CloudEvent[Any]) -> None:
+        try:
+            await self.producer.send(
+                topic=self.settings.event_name("dlq"),
+                key=event.subject,
+                value=encode_cloud_event(event),
+                headers=cloud_event_headers(),
+            )
+        except Exception:
+            emit_json(
+                logger,
+                level=logging.ERROR,
+                worker=self.config.worker_type,
+                stage="dlq",
+                event_id=event.id,
+                event="dlq_produce_failed",
+            )
+            return
+        try:
+            async with self._session_factory() as session:
+                async with session.begin():
+                    await OutboxRepository(session).mark_published_by_key(event.idempotencykey)
+        except Exception:
+            emit_json(
+                logger,
+                level=logging.WARNING,
+                worker=self.config.worker_type,
+                stage="dlq",
+                event_id=event.id,
+                event="dlq_mark_published_failed",
+            )
 
     async def _heartbeat_loop(self, stop: asyncio.Event) -> None:
         interval = max(float(self.config.heartbeat_interval_seconds), 1.0)
@@ -469,11 +559,16 @@ class DaemonLoop:
         )
 
 
+async def _should_claim(handler: EventHandler, event: CloudEvent[Any]) -> bool:
+    if isinstance(handler, ClaimFilter):
+        return await handler.should_claim(event)
+    return True
+
+
 async def _prepare_handler(handler: EventHandler, event: CloudEvent[Any]) -> object:
-    prepare = getattr(handler, "prepare", None)
-    if not callable(prepare):
-        return _UNPREPARED
-    return await prepare(event)
+    if isinstance(handler, PreparingHandler):
+        return await handler.prepare(event)
+    return _UNPREPARED
 
 
 async def _invoke_handler(
@@ -482,9 +577,8 @@ async def _invoke_handler(
     session: AsyncSession,
     prepared: object,
 ) -> None:
-    persist = getattr(handler, "persist", None)
-    if prepared is not _UNPREPARED and callable(persist):
-        await persist(event, session, prepared)
+    if prepared is not _UNPREPARED and isinstance(handler, PreparingHandler):
+        await handler.persist(event, session, prepared)
         return
     await handler.handle(event, session)
 
@@ -495,10 +589,8 @@ async def _call_terminal_failure(
     session: AsyncSession,
     exc: BaseException,
 ) -> None:
-    hook = getattr(handler, "on_terminal_failure", None)
-    if hook is None:
-        return
-    await hook(event, session, exc)
+    if isinstance(handler, TerminalFailureHandler):
+        await handler.on_terminal_failure(event, session, exc)
 
 
 def _stage_or_none(stage_name: str) -> IngestionStage | None:
@@ -523,6 +615,10 @@ def _item_slugs(event: CloudEvent[Any]) -> tuple[str, ...]:
     slug = getattr(data, "metacritic_slug", None)
     if isinstance(slug, str) and slug:
         return (slug,)
+    nested = getattr(data, "game", None)
+    nested_slug = getattr(nested, "metacritic_slug", None)
+    if isinstance(nested_slug, str) and nested_slug:
+        return (nested_slug,)
     subject = event.subject
     run_id = _event_run_id(event)
     if isinstance(subject, str) and subject and (run_id is None or subject != str(run_id)):
@@ -564,3 +660,47 @@ def _peek_event_id(value: bytes) -> str:
     if isinstance(raw, dict) and isinstance(raw.get("id"), str) and raw["id"]:
         return str(raw["id"])
     return "invalid"
+
+
+def _build_dlq_event(
+    settings: Settings,
+    *,
+    source: str,
+    original_topic: str,
+    original_id: str,
+    reason: DeadLetterReason,
+    error_type: str,
+    error_message: str,
+    run_id: UUID | None,
+) -> CloudEvent[Any]:
+    dead = DeadLetter(
+        original_topic=original_topic,
+        original_id=original_id,
+        reason=reason,
+        error_type=error_type,
+        error_message=sanitize_error_message(error_message),
+        payload_truncated=True,
+    )
+    return build_cloud_event(
+        settings,
+        "dlq",
+        source=source,
+        subject=original_id or original_topic,
+        data=dead,
+        stage="dlq",
+        run_id=run_id,
+    )
+
+
+async def _insert_dlq_outbox(
+    session: AsyncSession, worker_type: str, event: CloudEvent[Any]
+) -> None:
+    await OutboxRepository(session).insert(
+        OutboxInsert(
+            producer=worker_type,
+            idempotency_key=event.idempotencykey,
+            topic=event.type,
+            partition_key=event.subject,
+            payload=cloud_event_to_dict(event),
+        )
+    )

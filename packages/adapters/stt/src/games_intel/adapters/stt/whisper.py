@@ -48,6 +48,7 @@ class OpenAiWhisperStt:
         self._client = client or httpx.AsyncClient(base_url=base_url, timeout=timeout)
         self._model = stt.model
         self._api_key = stt.api_key.get_secret_value().strip()
+        self._max_audio_bytes = max(int(stt.max_audio_bytes), 1)
 
     async def aclose(self) -> None:
         if self._owns_client:
@@ -57,6 +58,12 @@ class OpenAiWhisperStt:
         if not self._api_key:
             raise SttAdapterError("unavailable", "openai api_key is not configured")
         path = resolve_audio_path(inp.audio_ref)
+        try:
+            size = path.stat().st_size
+        except OSError as exc:
+            raise SttAdapterError("unavailable", "audio file is not readable") from exc
+        if size > self._max_audio_bytes:
+            raise SttAdapterError("unavailable", "audio payload exceeds max_audio_bytes")
         audio = path.read_bytes()
         mime = _AUDIO_MIME.get(path.suffix.lower(), "application/octet-stream")
         files = {"file": (path.name or "audio.bin", audio, mime)}

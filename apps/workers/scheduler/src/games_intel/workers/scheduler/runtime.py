@@ -2,17 +2,16 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Awaitable, Callable
+from collections.abc import Callable
 from datetime import UTC, datetime
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
 from games_intel.db.engine import create_engine, create_session_factory, is_database_ready
 from games_intel.kafka.consumer import KafkaConsumer
-from games_intel.kafka.daemon import DaemonConfig, DaemonLoop
+from games_intel.kafka.daemon import DaemonConfig
 from games_intel.kafka.producer import KafkaProducer
-from games_intel.kafka.ready import wait_until_backend_ready
-from games_intel.kafka.relay import OutboxRelay
+from games_intel.kafka.runtime import SleepFn, WorkerStack, build_worker_stack, run_worker_stack
 from games_intel.settings import Settings, load_settings
 from games_intel.workers.scheduler.cron import CronMinuteGate
 from games_intel.workers.scheduler.handler import SchedulerHandler
@@ -22,7 +21,6 @@ from games_intel.workers.scheduler.ticks import enqueue_schedule_tick
 logger = logging.getLogger("games_intel.workers.scheduler")
 
 _WORKER_TYPE = "scheduler"
-SleepFn = Callable[[float], Awaitable[None]]
 Clock = Callable[[], datetime]
 
 
@@ -49,35 +47,28 @@ class SchedulerRuntime:
         self.handler = handler or SchedulerHandler(settings)
         self._sleep: SleepFn = sleep if sleep is not None else asyncio.sleep
         self._clock: Clock = clock if clock is not None else _utcnow
-        instance_id = settings.scheduler.instance_id
-        group_id = settings.consumer_group_id(settings.scheduler.consumer_group)
-        topic = settings.event_name(settings.scheduler.subscribe_event)
-        self.producer = producer or KafkaProducer(
-            settings, worker_type=_WORKER_TYPE, instance_id=instance_id
-        )
-        self.consumer = consumer or KafkaConsumer(
-            settings,
-            worker_type=_WORKER_TYPE,
-            instance_id=instance_id,
-            group_id=group_id,
-            topics=(topic,),
-        )
-        self.daemon = DaemonLoop(
+        stack = build_worker_stack(
             settings,
             DaemonConfig(
                 worker_type=_WORKER_TYPE,
-                instance_id=instance_id,
+                instance_id=settings.scheduler.instance_id,
                 stage_name=settings.scheduler.stage_name,
                 subscribe_event_key=settings.scheduler.subscribe_event,
                 heartbeat_interval_seconds=settings.scheduler.heartbeat_interval_seconds,
             ),
-            consumer=self.consumer,
-            producer=self.producer,
             session_factory=session_factory,
             handler=self.handler,
+            group_id=settings.consumer_group_id(settings.scheduler.consumer_group),
+            topics=(settings.event_name(settings.scheduler.subscribe_event),),
             sleep=self._sleep,
+            consumer=consumer,
+            producer=producer,
         )
-        self.relay = OutboxRelay(session_factory, self.producer, worker_type=_WORKER_TYPE)
+        self._stack: WorkerStack = stack
+        self.producer = stack.producer
+        self.consumer = stack.consumer
+        self.daemon = stack.daemon
+        self.relay = stack.relay
         self._tick_gate = CronMinuteGate()
         self._recompute_gate = CronMinuteGate()
 
@@ -85,30 +76,18 @@ class SchedulerRuntime:
         return await is_database_ready(self.engine)
 
     async def run(self, stop: asyncio.Event) -> None:
-        if not await wait_until_backend_ready(
-            self.engine,
-            self.settings,
-            sleep=self._sleep,
-            require_kafka=isinstance(self.producer, KafkaProducer),
-        ):
-            logger.error("scheduler not ready: database or kafka unavailable")
-            msg = "scheduler not ready: database or kafka unavailable"
-            raise RuntimeError(msg)
-        await self.producer.start()
-        tasks = [
-            asyncio.create_task(self.daemon.run(stop), name="scheduler-daemon"),
-            asyncio.create_task(self._relay_loop(stop), name="scheduler-relay"),
-            asyncio.create_task(self._recompute_loop(stop), name="scheduler-recompute"),
-        ]
+        extra = [self._recompute_loop(stop)]
         if self.settings.scheduler.tick_source == "in_process":
-            tasks.append(asyncio.create_task(self._tick_loop(stop), name="scheduler-ticks"))
-        try:
-            await asyncio.gather(*tasks)
-        finally:
-            await self.producer.stop()
-
-    async def _relay_loop(self, stop: asyncio.Event) -> None:
-        await self.relay.run_loop(stop, self._sleep)
+            extra.append(self._tick_loop(stop))
+        await run_worker_stack(
+            name="scheduler",
+            engine=self.engine,
+            settings=self.settings,
+            stack=self._stack,
+            sleep=self._sleep,
+            stop=stop,
+            extra_coros=extra,
+        )
 
     async def _tick_loop(self, stop: asyncio.Event) -> None:
         while not stop.is_set():

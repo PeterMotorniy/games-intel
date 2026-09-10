@@ -1,8 +1,6 @@
 from __future__ import annotations
 
 import asyncio
-import logging
-from collections.abc import Awaitable, Callable
 
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, async_sessionmaker
 
@@ -17,17 +15,13 @@ from games_intel.agents.letsplay_analyst import (
 from games_intel.agents.transcription import TranscriptionAgent, create_transcription_agent
 from games_intel.db.engine import create_engine, create_session_factory, is_database_ready
 from games_intel.kafka.consumer import KafkaConsumer
-from games_intel.kafka.daemon import DaemonConfig, DaemonLoop
+from games_intel.kafka.daemon import DaemonConfig
 from games_intel.kafka.producer import KafkaProducer
-from games_intel.kafka.ready import wait_until_backend_ready
-from games_intel.kafka.relay import OutboxRelay
+from games_intel.kafka.runtime import SleepFn, WorkerStack, build_worker_stack, run_worker_stack
 from games_intel.settings import Settings, load_settings
 from games_intel.workers.letsplay.handler import LetsPlayHandler
 
-logger = logging.getLogger("games_intel.workers.letsplay")
-
 _WORKER_TYPE = "letsplay"
-SleepFn = Callable[[float], Awaitable[None]]
 
 
 class LetsPlayRuntime:
@@ -55,67 +49,43 @@ class LetsPlayRuntime:
         self.stt = stt
         self.handler = handler or LetsPlayHandler(settings, youtube, transcription, analyst)
         self._sleep: SleepFn = sleep if sleep is not None else asyncio.sleep
-        instance_id = settings.letsplay.instance_id
-        group_id = settings.consumer_group_id(settings.letsplay.consumer_group)
-        topic = settings.event_name(settings.letsplay.subscribe_event)
-        self.producer = producer or KafkaProducer(
-            settings, worker_type=_WORKER_TYPE, instance_id=instance_id
-        )
-        self.consumer = consumer or KafkaConsumer(
-            settings,
-            worker_type=_WORKER_TYPE,
-            instance_id=instance_id,
-            group_id=group_id,
-            topics=(topic,),
-        )
-        self.daemon = DaemonLoop(
+        stack = build_worker_stack(
             settings,
             DaemonConfig(
                 worker_type=_WORKER_TYPE,
-                instance_id=instance_id,
+                instance_id=settings.letsplay.instance_id,
                 stage_name=settings.letsplay.stage_name,
                 subscribe_event_key=settings.letsplay.subscribe_event,
                 heartbeat_interval_seconds=settings.letsplay.heartbeat_interval_seconds,
                 lease_seconds=settings.letsplay.lease_seconds,
             ),
-            consumer=self.consumer,
-            producer=self.producer,
             session_factory=session_factory,
             handler=self.handler,
+            group_id=settings.consumer_group_id(settings.letsplay.consumer_group),
+            topics=(settings.event_name(settings.letsplay.subscribe_event),),
             sleep=self._sleep,
+            consumer=consumer,
+            producer=producer,
         )
-        self.relay = OutboxRelay(session_factory, self.producer, worker_type=_WORKER_TYPE)
+        self._stack: WorkerStack = stack
+        self.producer = stack.producer
+        self.consumer = stack.consumer
+        self.daemon = stack.daemon
+        self.relay = stack.relay
 
     async def ready(self) -> bool:
         return await is_database_ready(self.engine)
 
     async def run(self, stop: asyncio.Event) -> None:
-        if not await wait_until_backend_ready(
-            self.engine,
-            self.settings,
+        await run_worker_stack(
+            name="letsplay",
+            engine=self.engine,
+            settings=self.settings,
+            stack=self._stack,
             sleep=self._sleep,
-            require_kafka=isinstance(self.producer, KafkaProducer),
-        ):
-            logger.error("letsplay not ready: database or kafka unavailable")
-            msg = "letsplay not ready: database or kafka unavailable"
-            raise RuntimeError(msg)
-        await self.producer.start()
-        try:
-            await asyncio.gather(self.daemon.run(stop), self._relay_loop(stop))
-        finally:
-            await self.producer.stop()
-            close = getattr(self.youtube, "aclose", None)
-            if close is not None:
-                await close()
-            transcription_close = getattr(self.transcription, "aclose", None)
-            if transcription_close is not None:
-                await transcription_close()
-            analyst_close = getattr(self.analyst, "aclose", None)
-            if analyst_close is not None:
-                await analyst_close()
-
-    async def _relay_loop(self, stop: asyncio.Event) -> None:
-        await self.relay.run_loop(stop, self._sleep)
+            stop=stop,
+            closeables=(self.youtube, self.transcription, self.analyst),
+        )
 
 
 def build_runtime(

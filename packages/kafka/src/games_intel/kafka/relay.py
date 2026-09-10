@@ -26,17 +26,21 @@ class OutboxRelay:
         *,
         worker_type: str,
         batch_size: int = 10,
+        instance_id: str = "relay",
     ) -> None:
         self._session_factory = session_factory
         self._producer = producer
         self._worker_type = worker_type
         self._batch_size = batch_size
+        self._claimed_by = f"{worker_type}:{instance_id}"
 
     async def publish_once(self) -> int:
         async with self._session_factory() as session:
             async with session.begin():
                 claimed = await OutboxRepository(session).claim(
-                    self._worker_type, limit=self._batch_size
+                    self._worker_type,
+                    limit=self._batch_size,
+                    claimed_by=self._claimed_by,
                 )
         published_ids: list[int] = []
         for row in claimed:

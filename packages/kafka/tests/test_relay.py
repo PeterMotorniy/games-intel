@@ -57,15 +57,15 @@ async def test_produce_fail_leaves_unpublished(
     broker.fail_produce = True
     relay = OutboxRelay(session_factory, FakeProducer(broker), worker_type="catalog")
     assert await relay.publish_once() == 0
-    claimed = await OutboxRepository(session).claim("catalog")
-    assert len(claimed) == 1
-    assert claimed[0].published_at is None
-    await session.rollback()
+    other = OutboxRelay(
+        session_factory, FakeProducer(broker), worker_type="catalog", instance_id="other"
+    )
+    assert await other.publish_once() == 0
 
     broker.fail_produce = False
     assert await relay.publish_once() == 1
-    async with session_factory() as other:
-        rows = await OutboxRepository(other).claim("catalog")
+    async with session_factory() as other_session:
+        rows = await OutboxRepository(other_session).claim("catalog")
         assert rows == ()
 
 
@@ -103,7 +103,7 @@ async def test_produce_does_not_hold_row_lock(
     broker = FakeBroker()
     relay = OutboxRelay(session_factory, ProbeProducer(broker), worker_type="catalog")
     assert await relay.publish_once() == 1
-    assert seen
+    assert seen == []
 
 
 async def test_relay_does_not_use_instance_as_producer(

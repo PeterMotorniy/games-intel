@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import logging
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -65,12 +66,12 @@ class ReviewsHandler:
         if not isinstance(cataloged, GameCataloged):
             msg = "reviews expected GameCataloged payload"
             raise TypeError(msg)
-        critic_batch, critic_transient = await self._get_reviews_side(
-            cataloged.metacritic_slug, kind="critic"
+        critic_result, user_result = await asyncio.gather(
+            self._get_reviews_side(cataloged.metacritic_slug, kind="critic"),
+            self._get_reviews_side(cataloged.metacritic_slug, kind="user"),
         )
-        user_batch, user_transient = await self._get_reviews_side(
-            cataloged.metacritic_slug, kind="user"
-        )
+        critic_batch, critic_transient = critic_result
+        user_batch, user_transient = user_result
         if not critic_batch.items and not user_batch.items and (critic_transient or user_transient):
             raise TransientError("sidecar timeout fetching reviews")
         critic_empty = not critic_batch.items

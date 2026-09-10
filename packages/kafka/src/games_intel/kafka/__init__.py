@@ -1,7 +1,14 @@
 from games_intel.kafka.classify import map_adapter_error
 from games_intel.kafka.client import admin_config, consumer_config, producer_config
 from games_intel.kafka.consumer import KafkaConsumer
-from games_intel.kafka.daemon import DaemonConfig, DaemonLoop, EventHandler
+from games_intel.kafka.daemon import (
+    ClaimFilter,
+    DaemonConfig,
+    DaemonLoop,
+    EventHandler,
+    PreparingHandler,
+    TerminalFailureHandler,
+)
 from games_intel.kafka.envelope import parse_cloud_event
 from games_intel.kafka.exceptions import (
     GamesIntelError,
@@ -18,6 +25,7 @@ from games_intel.kafka.relay import OutboxRelay
 from games_intel.kafka.source import api_source, worker_source
 
 __all__ = [
+    "ClaimFilter",
     "DaemonConfig",
     "DaemonLoop",
     "EventHandler",
@@ -28,8 +36,10 @@ __all__ = [
     "NotFoundError",
     "OutboxRelay",
     "ParseError",
+    "PreparingHandler",
     "QuotaError",
     "SchemaError",
+    "TerminalFailureHandler",
     "TransientError",
     "admin_config",
     "api_source",

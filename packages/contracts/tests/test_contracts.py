@@ -14,6 +14,7 @@ from games_intel.contracts import (
     DeadLetter,
     GameCataloged,
     GameLetsPlayAnalyzed,
+    GameListed,
     GameReviewsSummarized,
     GameSimilarAssigned,
     GamesPageListed,
@@ -67,6 +68,20 @@ def _payloads() -> dict[str, Any]:
                         "position": 0,
                     }
                 ],
+            }
+        ),
+        "GameListed": GameListed.model_validate(
+            {
+                "run_id": RUN_ID,
+                "process_date": PROCESS_DATE,
+                "source": "new_releases",
+                "page": None,
+                "game": {
+                    "metacritic_slug": "elden-ring",
+                    "title": "Elden Ring",
+                    "listing_url": "https://www.metacritic.com/game/elden-ring/",
+                    "position": 0,
+                },
             }
         ),
         "GameCataloged": GameCataloged.model_validate(

@@ -1,10 +1,13 @@
 from __future__ import annotations
 
+import asyncio
 from typing import Any
 
 from games_intel.kafka.client import producer_config
 from games_intel.kafka.serialization import cloud_event_headers
 from games_intel.settings import Settings
+
+_SEND_TIMEOUT_SECONDS = 20.0
 
 
 class KafkaProducer:
@@ -35,9 +38,12 @@ class KafkaProducer:
             msg = "producer is not started"
             raise RuntimeError(msg)
         send_headers = headers or cloud_event_headers()
-        await self._producer.send_and_wait(
-            topic,
-            value=value,
-            key=key.encode("utf-8"),
-            headers=list(send_headers),
+        await asyncio.wait_for(
+            self._producer.send_and_wait(
+                topic,
+                value=value,
+                key=key.encode("utf-8"),
+                headers=list(send_headers),
+            ),
+            timeout=_SEND_TIMEOUT_SECONDS,
         )

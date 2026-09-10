@@ -110,25 +110,26 @@ export function RunDag({ graph, onSelectTask }: RunDagProps) {
         <div className="dag-stage dag-stage--catalog">
           <p className="dag-stage__label">Step 2</p>
           <TaskNode task={graph.catalogTask} nowMs={nowMs} onSelect={onSelectTask} />
-          <div className="dag-fanout">
-            <p className="dag-then dag-then--down">{showGameFanout ? "then each game" : "then"}</p>
-            <ol className="dag-games">
-              {(showGameFanout ? namedGames : graph.games).map((branch, index) => (
-                <GameBranch
-                  key={branch.slug || `${graph.run.id}:empty`}
-                  branch={branch}
-                  step={showGameFanout ? `Step 3.${index + 1}` : "Step 3"}
-                  nowMs={nowMs}
-                  onSelect={onSelectTask}
-                />
-              ))}
-            </ol>
-            {!showGameFanout && graph.run.status === "completed" && graph.run.discovered_count === 0 ? (
-              <p className="muted dag-empty">
-                No new games this run. They were already collected today or the listing was empty.
-              </p>
-            ) : null}
-          </div>
+          {showGameFanout ? (
+            <div className="dag-fanout">
+              <p className="dag-then dag-then--down">then each game</p>
+              <ol className="dag-games">
+                {namedGames.map((branch, index) => (
+                  <GameBranch
+                    key={branch.slug}
+                    branch={branch}
+                    step={`Step 3.${index + 1}`}
+                    nowMs={nowMs}
+                    onSelect={onSelectTask}
+                  />
+                ))}
+              </ol>
+            </div>
+          ) : graph.run.status === "completed" && graph.run.discovered_count === 0 ? (
+            <p className="muted dag-empty">
+              No new games this run. They were already collected today or the listing was empty.
+            </p>
+          ) : null}
         </div>
       </div>
     </section>

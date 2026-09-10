@@ -85,7 +85,12 @@ export function monitorStreamUrl(): string {
 }
 
 export async function startRun(): Promise<RunAccepted> {
-  const response = await fetch(buildUrl("/runs"), { method: "POST" });
+  const headers: HeadersInit = {};
+  const token = import.meta.env.VITE_API_COMMAND_TOKEN;
+  if (typeof token === "string" && token.trim()) {
+    headers["X-Api-Key"] = token.trim();
+  }
+  const response = await fetch(buildUrl("/runs"), { method: "POST", headers });
   if (!response.ok) {
     throw await parseError(response);
   }

@@ -44,6 +44,7 @@ def producer_config(
         "bootstrap_servers": settings.kafka.bootstrap_servers,
         "client_id": resolve_client_id(settings, worker_type, instance_id),
         "acks": "all",
+        "request_timeout_ms": 20_000,
     }
     cfg.update(_security_kwargs(settings))
     return cfg

@@ -371,8 +371,32 @@ a:hover {
   letter-spacing: 0.04em;
 }
 
-.score__value {
-  font-weight: 700;
+.score--lg {
+  padding: 0.35rem 0.65rem;
+  gap: 0.45rem;
+}
+
+.score--lg .score__value {
+  font-size: 1.35rem;
+  line-height: 1;
+}
+
+.score--hero {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.2rem;
+  min-width: 6.75rem;
+  padding: 0.7rem 0.9rem;
+}
+
+.score--hero .score__label {
+  font-size: 0.72rem;
+}
+
+.score--hero .score__value {
+  font-size: 2.5rem;
+  line-height: 0.95;
+  font-weight: 800;
 }
 
 .score--high {
@@ -643,6 +667,26 @@ a:hover {
 
 .game-hero__meta {
   min-width: 0;
+}
+
+.game-hero__heading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem 1.5rem;
+  margin: 0 0 0.75rem;
+}
+
+.game-hero__heading h1 {
+  margin: 0;
+  flex: 1 1 12rem;
+}
+
+.game-hero__scores {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.65rem;
 }
 
 .game-hero__pills {

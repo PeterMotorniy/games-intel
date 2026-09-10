@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import logging
-from typing import Literal
+from typing import Literal, Protocol
 
 from games_intel.adapters.metacritic.cache import PageCache
 from games_intel.adapters.metacritic.circuit import CircuitBreaker, CircuitSnapshot
@@ -39,12 +39,16 @@ _HTTP_ERROR: dict[int, tuple[str, str]] = {
 }
 
 
-class HealthSink:
+class HealthSink(Protocol):
+    async def persist(self, snapshot: CircuitSnapshot) -> None: ...
+
+
+class NoopHealthSink:
     async def persist(self, snapshot: CircuitSnapshot) -> None:
         return None
 
 
-class MemoryHealthSink(HealthSink):
+class MemoryHealthSink:
     def __init__(self) -> None:
         self.latest: CircuitSnapshot | None = None
 
@@ -67,7 +71,7 @@ class ScrapeService:
         self._fetcher = fetcher
         self._cache = cache
         self._circuit = circuit
-        self._health = health if health is not None else HealthSink()
+        self._health = health if health is not None else NoopHealthSink()
         self._download_covers = download_covers
 
     @property
@@ -210,7 +214,12 @@ class ScrapeService:
         await self._health.persist(snapshot)
 
     async def _on_adapter_error(self, exc: MetacriticAdapterError) -> None:
-        if exc.code != "parse_error":
+        if exc.code == "not_found":
             return
-        snapshot = self._circuit.record_parse_error()
+        if exc.code == "parse_error":
+            snapshot = self._circuit.record_parse_error()
+        elif exc.code in {"timeout", "unavailable", "rate_limited"}:
+            snapshot = self._circuit.record_failure()
+        else:
+            return
         await self._health.persist(snapshot)

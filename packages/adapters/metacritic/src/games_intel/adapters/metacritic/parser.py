@@ -47,6 +47,20 @@ _CREDIT_LABEL_RE = re.compile(r"^(developer|publisher)\s*:\s*", re.IGNORECASE)
 _USER_SCORE_ARIA_RE = re.compile(r"user score\s+(\d+(?:\.\d+)?)", re.IGNORECASE)
 
 
+def listing_container_selector(
+    settings: MetacriticAdapterSettings, source: Literal["new_releases", "browse"]
+) -> str:
+    if source == "browse":
+        browse = settings.markers.browse_listing_container.strip()
+        if browse:
+            return browse
+    return settings.markers.listing_container
+
+
+def split_css_selectors(selector: str) -> list[str]:
+    return [part.strip() for part in selector.split(",") if part.strip()]
+
+
 def parse_listing(
     html: str,
     settings: MetacriticAdapterSettings,
@@ -56,16 +70,14 @@ def parse_listing(
     limit: int | None = None,
 ) -> GameListing:
     soup = BeautifulSoup(html, "html.parser")
-    container = _first_match(soup, settings.markers.listing_container)
+    container = _first_listed_match(soup, listing_container_selector(settings, source))
     if container is None:
         raise MetacriticAdapterError("parse_error", "listing container marker missing")
     title_selector = settings.markers.listing_section_title
     if title_selector.strip() and _first_match(container, title_selector) is None:
         if _first_match(soup, title_selector) is None:
             raise MetacriticAdapterError("parse_error", "listing section title marker missing")
-    cards = _select(container, settings.selectors.listing.game_card)
-    if not cards:
-        cards = _select(soup, settings.selectors.listing.game_card)
+    cards = _listing_cards(soup, container, settings, source)
     items: list[GameListingItem] = []
     for card in cards:
         item = _parse_listing_card(card, settings)
@@ -229,10 +241,11 @@ def _parse_platforms(root: Tag, settings: MetacriticAdapterSettings) -> list[Pla
                 userscore=_parse_float_score(_first_text(user_node)),
             )
         )
-    return _apply_hero_userscore(scores, root)
+    return _apply_hero_scores(scores, root)
 
 
 _PLATFORM_QUERY_RE = re.compile(r"[?&]platform=([a-z0-9-]+)", re.IGNORECASE)
+_METASCORE_ARIA_RE = re.compile(r"metascore\s+(\d+)", re.IGNORECASE)
 
 
 def _platform_code_from_node(node: Tag, settings: MetacriticAdapterSettings) -> str:
@@ -265,20 +278,37 @@ def _credit_text(root: Tag | BeautifulSoup, selector: str) -> str | None:
     return cleaned or None
 
 
-def _parse_hero_user_score(root: Tag) -> float | None:
+def _parse_hero_labeled_score(root: Tag, header: str) -> str:
+    wanted = header.casefold()
     for block in _select(root, '[data-testid="product-score"]'):
-        header = _first_text(_first_match(block, '[data-testid="global-score-header"]'))
-        if header.casefold() != "user score":
+        label = _first_text(_first_match(block, '[data-testid="global-score-header"]'))
+        if label.casefold() != wanted:
             continue
         wrapper = _first_match(block, '[data-testid="global-score-value-wrapper"]')
         aria = _attr(wrapper, "aria-label") or _attr(wrapper, "title")
-        match = _USER_SCORE_ARIA_RE.search(aria)
-        if match is not None:
-            return _parse_float_score(match.group(1))
-        return _parse_float_score(
-            _first_text(_first_match(block, '[data-testid="global-score-value"]'))
-        )
-    return None
+        if aria:
+            return aria
+        tbd = _first_text(_first_match(block, '[data-testid="global-score-tbd"]'))
+        if tbd:
+            return tbd
+        return _first_text(_first_match(block, '[data-testid="global-score-value"]'))
+    return ""
+
+
+def _parse_hero_user_score(root: Tag) -> float | None:
+    raw = _parse_hero_labeled_score(root, "user score")
+    match = _USER_SCORE_ARIA_RE.search(raw)
+    if match is not None:
+        return _parse_float_score(match.group(1))
+    return _parse_float_score(raw)
+
+
+def _parse_hero_metascore(root: Tag) -> int | None:
+    raw = _parse_hero_labeled_score(root, "metascore")
+    match = _METASCORE_ARIA_RE.search(raw)
+    if match is not None:
+        return _parse_int_score(match.group(1))
+    return _parse_int_score(raw)
 
 
 def _selected_platform_code(root: Tag) -> str:
@@ -298,22 +328,34 @@ def _selected_platform_code(root: Tag) -> str:
     return ""
 
 
-def _apply_hero_userscore(scores: list[PlatformScore], root: Tag) -> list[PlatformScore]:
+def _apply_hero_scores(scores: list[PlatformScore], root: Tag) -> list[PlatformScore]:
+    hero_meta = _parse_hero_metascore(root)
     hero_user = _parse_hero_user_score(root)
-    if hero_user is None or not scores:
+    if (hero_meta is None and hero_user is None) or not scores:
         return scores
     selected = _selected_platform_code(root)
+    target: int | None = None
     if selected:
         for index, row in enumerate(scores):
             if row.platform_code == selected:
-                if row.userscore is None:
-                    scores[index] = row.model_copy(update={"userscore": hero_user})
-                return scores
-    scored = [index for index, row in enumerate(scores) if row.metascore is not None]
-    if len(scored) == 1:
-        index = scored[0]
-        if scores[index].userscore is None:
-            scores[index] = scores[index].model_copy(update={"userscore": hero_user})
+                target = index
+                break
+    if target is None:
+        scored = [index for index, row in enumerate(scores) if row.metascore is not None]
+        if len(scored) == 1:
+            target = scored[0]
+        elif len(scores) == 1:
+            target = 0
+    if target is None:
+        return scores
+    row = scores[target]
+    updates: dict[str, int | float] = {}
+    if hero_meta is not None and row.metascore is None:
+        updates["metascore"] = hero_meta
+    if hero_user is not None and row.userscore is None:
+        updates["userscore"] = hero_user
+    if updates:
+        scores[target] = row.model_copy(update=updates)
     return scores
 
 
@@ -420,6 +462,38 @@ def _parse_date(text: str) -> date | None:
             return datetime.strptime(cleaned, fmt).date()
         except ValueError:
             continue
+    return None
+
+
+def _listing_cards(
+    soup: BeautifulSoup,
+    container: Tag,
+    settings: MetacriticAdapterSettings,
+    source: Literal["new_releases", "browse"],
+) -> list[Tag]:
+    cards = _select(container, settings.selectors.listing.game_card)
+    if cards:
+        return cards
+    listed: list[Tag] = []
+    for part in split_css_selectors(listing_container_selector(settings, source)):
+        listed.extend(_select(soup, part))
+    if listed and _parse_listing_card(listed[0], settings) is not None:
+        return listed
+    if source == "browse":
+        return []
+    return _select(soup, settings.selectors.listing.game_card)
+
+
+def _first_listed_match(root: Tag | BeautifulSoup, selector: str) -> Tag | None:
+    """Match comma-separated selectors in listed order, not document order.
+
+    Browse pages ship a homepage carousel above ``filter-results``. CSS ``select()``
+    would otherwise lock onto the carousel and hide the actual browse list.
+    """
+    for part in split_css_selectors(selector):
+        match = _first_match(root, part)
+        if match is not None:
+            return match
     return None
 
 

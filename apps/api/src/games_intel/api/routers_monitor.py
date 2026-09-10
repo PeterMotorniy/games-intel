@@ -2,10 +2,12 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Awaitable, Callable
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Request, Response
 from fastapi.responses import StreamingResponse
 
+from games_intel.api.errors import ProblemError
 from games_intel.api.schemas import MonitorSnapshot, RunAcceptedResponse
 from games_intel.api.services import MonitorQueryService, RunCommandService
 from games_intel.settings import Settings
@@ -79,7 +81,37 @@ def create_monitor_router(settings: Settings) -> APIRouter:
     @router.post("/runs", status_code=202, response_model=RunAcceptedResponse)
     async def start_run(request: Request, response: Response) -> RunAcceptedResponse:
         response.headers["Cache-Control"] = "no-store"
+        _require_command_auth(request, settings)
+        _enforce_command_rate_limit(request, settings)
         runs: RunCommandService = request.app.state.runs
         return await runs.accept_manual_run()
 
     return router
+
+
+def _require_command_auth(request: Request, settings: Settings) -> None:
+    token = settings.api.command_token.get_secret_value().strip()
+    if not token:
+        return
+    header = request.headers.get("x-api-key") or request.headers.get("authorization", "")
+    if header.lower().startswith("bearer "):
+        offered = header.removeprefix("Bearer ").strip()
+    else:
+        offered = header
+    if offered != token:
+        raise ProblemError(401, "Unauthorized", "command token required")
+
+
+def _enforce_command_rate_limit(request: Request, settings: Settings) -> None:
+    limit = max(int(settings.api.command_rate_limit_per_minute), 0)
+    if limit <= 0:
+        return
+    bucket: dict[str, list[float]] = getattr(request.app.state, "run_rate_limit", None) or {}
+    request.app.state.run_rate_limit = bucket
+    key = request.client.host if request.client is not None else "unknown"
+    now = datetime.now(UTC).timestamp()
+    window = [stamp for stamp in bucket.get(key, []) if now - stamp < 60]
+    if len(window) >= limit:
+        raise ProblemError(429, "Too Many Requests", "run command rate limit exceeded")
+    window.append(now)
+    bucket[key] = window

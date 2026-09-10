@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Awaitable, Callable
 from contextlib import asynccontextmanager
 from typing import Any, cast
 
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
+from starlette.responses import Response
 
 from games_intel.adapters.metacritic.cache import MemoryPageCache
 from games_intel.adapters.metacritic.circuit import CircuitBreaker, CircuitSnapshot
@@ -66,6 +67,20 @@ def create_app(
     app.state.settings = loaded
     if service is not None:
         app.state.service = service
+
+    @app.middleware("http")
+    async def require_sidecar_token(
+        request: Request, call_next: Callable[[Request], Awaitable[Response]]
+    ) -> Response:
+        if request.url.path in {"/healthz", "/docs", "/openapi.json", "/redoc"}:
+            return await call_next(request)
+        token = loaded.adapters.metacritic.sidecar_token.get_secret_value().strip()
+        if not token:
+            return await call_next(request)
+        header = request.headers.get("x-scrape-token") or request.headers.get("x-api-key")
+        if header != token:
+            return JSONResponse(status_code=401, content={"detail": "unauthorized"})
+        return await call_next(request)
 
     @app.exception_handler(MetacriticAdapterError)
     async def adapter_error_handler(_request: Request, exc: MetacriticAdapterError) -> JSONResponse:

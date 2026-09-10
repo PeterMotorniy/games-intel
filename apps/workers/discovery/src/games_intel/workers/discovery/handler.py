@@ -18,17 +18,12 @@ from games_intel.contracts.adapters import (
 from games_intel.contracts.builder import build_cloud_event
 from games_intel.contracts.envelope import CloudEvent
 from games_intel.contracts.ids import new_traceparent
-from games_intel.contracts.payloads import GamesPageListed, ListedGame, RunRequested
+from games_intel.contracts.payloads import GameListed, ListedGame, RunRequested
 from games_intel.db.records import OutboxInsert
 from games_intel.db.repositories.catalog import GameCatalogRepository
 from games_intel.db.repositories.ingestion import IngestionRepository
 from games_intel.db.repositories.outbox import OutboxRepository
-from games_intel.db.types import (
-    IngestionItemStatus,
-    IngestionRunStatus,
-    IngestionStage,
-    InsertOutcome,
-)
+from games_intel.db.types import IngestionItemStatus, IngestionRunStatus, IngestionStage
 from games_intel.kafka.classify import map_adapter_error
 from games_intel.kafka.exceptions import ParseError
 from games_intel.kafka.serialization import cloud_event_to_dict
@@ -133,11 +128,6 @@ class DiscoveryHandler:
                 title=item.title,
                 listing_url=str(item.listing_url),
             )
-            slug_outcome = await ingestion.record_daily_processed_slug(
-                requested.process_date, item.slug
-            )
-            if slug_outcome is InsertOutcome.duplicate:
-                continue
             await ingestion.upsert_item(
                 run_id=requested.run_id,
                 metacritic_slug=item.slug,
@@ -155,15 +145,18 @@ class DiscoveryHandler:
                     position=item.position,
                 )
             )
-        if listed:
-            await _enqueue_page_listed(
+        for game in listed:
+            await _enqueue_game_listed(
                 session,
                 self.settings,
                 requested=requested,
-                games=listed,
+                game=game,
             )
         published = len(listed)
-        await _advance_cursor(ingestion, requested, self.settings)
+        if not listing.items and requested.source == self.settings.scheduler.browse_source:
+            raise ParseError("browse listing was empty")
+        if listing.items or requested.source == self.settings.scheduler.new_releases_source:
+            await _advance_cursor(ingestion, requested, self.settings)
         await ingestion.update_run(
             requested.run_id,
             status=IngestionRunStatus.completed,
@@ -194,25 +187,25 @@ async def _advance_cursor(
     )
 
 
-async def _enqueue_page_listed(
+async def _enqueue_game_listed(
     session: AsyncSession,
     settings: Settings,
     *,
     requested: RunRequested,
-    games: list[ListedGame],
+    game: ListedGame,
 ) -> None:
-    payload = GamesPageListed(
+    payload = GameListed(
         run_id=requested.run_id,
         process_date=requested.process_date,
         source=requested.source,
         page=requested.page,
-        games=games,
+        game=game,
     )
     event = build_cloud_event(
         settings,
         settings.discovery.publish_event,
         source=worker_source(settings, _WORKER_TYPE),
-        subject=str(requested.run_id),
+        subject=game.metacritic_slug,
         data=payload,
         stage=settings.discovery.stage_name,
         run_id=requested.run_id,
@@ -223,7 +216,7 @@ async def _enqueue_page_listed(
             producer=_WORKER_TYPE,
             idempotency_key=event.idempotencykey,
             topic=settings.event_name(settings.discovery.publish_event),
-            partition_key=str(requested.run_id),
+            partition_key=game.metacritic_slug,
             payload=cloud_event_to_dict(event),
         )
     )

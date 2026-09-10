@@ -15,6 +15,7 @@ from games_intel.db.records import IngestionCursorRecord
 from games_intel.db.repositories.ingestion import IngestionRepository
 from games_intel.db.repositories.outbox import OutboxRepository
 from games_intel.db.types import IngestionRunStatus, InsertOutcome, RunTrigger
+from games_intel.kafka.exceptions import TransientError
 from games_intel.kafka.source import worker_source
 from games_intel.settings import Settings
 from games_intel.workers.scheduler.clock import process_date_for
@@ -199,10 +200,9 @@ async def test_two_handlers_without_lock_claim_next_page(
     async with session_factory() as check:
         runs = await IngestionRepository(check).list_runs_for_date(PROCESS_DATE)
     assert sorted((run.source, run.page) for run in runs) == [
-        ("browse", 1),
         ("new_releases", None),
     ]
-    assert handler_a.runs_created + handler_b.runs_created == 2
+    assert handler_a.runs_created + handler_b.runs_created == 1
 
 
 async def test_two_handlers_with_lock_one_run(
@@ -214,9 +214,12 @@ async def test_two_handlers_with_lock_one_run(
     handler_b = SchedulerHandler(_settings(), use_lock=True)
 
     async def run_one(event_id: str, handler: SchedulerHandler) -> None:
-        async with session_factory() as other:
-            async with other.begin():
-                await handler.handle(_tick(event_id=event_id), other)
+        try:
+            async with session_factory() as other:
+                async with other.begin():
+                    await handler.handle(_tick(event_id=event_id), other)
+        except TransientError:
+            return
 
     await asyncio.gather(run_one("lock-a", handler_a), run_one("lock-b", handler_b))
     async with session_factory() as check:
@@ -390,3 +393,44 @@ async def test_external_tick_enqueues_cron_when_due(
     assert len(broker.topics[topic]) == 1
     payload = broker.topics[topic][0]
     assert payload.key == PROCESS_DATE.isoformat()
+
+
+class _HangingProducer:
+    async def start(self) -> None:
+        return None
+
+    async def stop(self) -> None:
+        return None
+
+    async def send(self, **kwargs: object) -> None:
+        await asyncio.sleep(3600)
+
+
+async def test_external_tick_continues_after_relay_timeout(
+    session: AsyncSession,
+    session_factory: async_sessionmaker[AsyncSession],
+    engine: AsyncEngine,
+) -> None:
+    from games_intel.workers.scheduler.external_tick import ExternalTickRuntime
+
+    await session.commit()
+    stop = asyncio.Event()
+    sleeps = 0
+
+    async def sleep_and_stop(_delay: float) -> None:
+        nonlocal sleeps
+        sleeps += 1
+        stop.set()
+
+    runtime = ExternalTickRuntime(
+        _settings(),
+        session_factory=session_factory,
+        engine=engine,
+        producer=_HangingProducer(),
+        sleep=sleep_and_stop,
+        clock=lambda: NOW,
+        relay_timeout_seconds=0.05,
+    )
+    await runtime.run(stop)
+    assert runtime.ticks_enqueued == 1
+    assert sleeps == 1

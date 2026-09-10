@@ -28,8 +28,20 @@ export function GameCard({ game }: GameCardProps) {
             <p className="meta-pill meta-pill--developer">{game.developer}</p>
           ) : null}
           <div className="game-card__scores">
-            <ScoreBadge value={game.metascore} kind="meta" label="Metascore" collection={catalog} />
-            <ScoreBadge value={game.userscore} kind="user" label="Userscore" collection={catalog} />
+            <ScoreBadge
+              value={game.metascore}
+              kind="meta"
+              label="Metascore"
+              collection={catalog}
+              size="lg"
+            />
+            <ScoreBadge
+              value={game.userscore}
+              kind="user"
+              label="Userscore"
+              collection={catalog}
+              size="lg"
+            />
           </div>
           {platforms.length > 0 ? (
             <ul className="chips" aria-label="Platforms">

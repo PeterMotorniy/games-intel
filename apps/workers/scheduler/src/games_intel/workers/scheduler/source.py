@@ -17,9 +17,14 @@ _CLAIMED = frozenset(
 
 
 class PageClaim(Protocol):
-    source: str
-    page: int | None
-    status: IngestionRunStatus
+    @property
+    def source(self) -> str: ...
+
+    @property
+    def page(self) -> int | None: ...
+
+    @property
+    def status(self) -> IngestionRunStatus: ...
 
 
 def decide_source_and_page(

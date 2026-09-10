@@ -70,6 +70,16 @@ async def session_scope(
         await session.close()
 
 
+_EMBEDDING_DIM_SQL = """
+SELECT format_type(a.atttypid, a.atttypmod)
+FROM pg_attribute a
+JOIN pg_class c ON c.oid = a.attrelid
+JOIN pg_namespace n ON n.oid = c.relnamespace
+WHERE n.nspname = 'public' AND c.relname = 'games'
+AND a.attname = 'embedding' AND a.attnum > 0
+"""
+
+
 async def is_database_ready(engine: AsyncEngine) -> bool:
     try:
         async with engine.connect() as connection:
@@ -78,6 +88,16 @@ async def is_database_ready(engine: AsyncEngine) -> bool:
     except Exception as exc:
         logger.warning("database not ready error_type=%s", type(exc).__name__)
         return False
+
+
+async def assert_embedding_dimension(engine: AsyncEngine, expected: int) -> None:
+    """Fail fast when pgvector column width disagrees with embeddings.vector_dim."""
+    async with engine.connect() as connection:
+        formatted = (await connection.execute(text(_EMBEDDING_DIM_SQL))).scalar_one_or_none()
+    expected_type = f"vector({expected})"
+    if formatted != expected_type:
+        msg = f"games.embedding is {formatted!r}, expected {expected_type}"
+        raise RuntimeError(msg)
 
 
 SleepFn = Callable[[float], Awaitable[None]]

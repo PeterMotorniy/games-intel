@@ -93,7 +93,7 @@ def test_cosine_clamped_and_jaccard_release() -> None:
     far = release_similarity(date(2020, 1, 1), date(2024, 1, 1), tau_days=365)
     assert close is not None and far is not None
     assert close > far
-    assert release_similarity(None, date(2022, 1, 1), tau_days=365) == 0.0
+    assert release_similarity(None, date(2022, 1, 1), tau_days=365) is None
 
 
 def test_hybrid_renormalizes_zero_signals() -> None:

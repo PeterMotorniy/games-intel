@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from games_intel.agents.review_summarizer.checkpoint import (
     AGENT_NAME,
     build_thread_id,
+    input_digest,
     open_checkpointer,
 )
 from games_intel.agents.review_summarizer.exceptions import LlmStructureError, LlmTransientError
@@ -70,7 +71,11 @@ class ReviewSummarizer:
         return self._graph
 
     async def ainvoke(self, inp: ReviewSummarizerInput) -> ReviewSummarizerOutput:
-        thread_id = build_thread_id(inp.run_id, inp.metacritic_slug)
+        digest = input_digest(
+            *(item.excerpt for item in inp.critic),
+            *(item.excerpt for item in inp.user),
+        )
+        thread_id = build_thread_id(inp.run_id, inp.metacritic_slug, digest)
         graph = await self._ensure_graph()
         config = {
             "configurable": {"thread_id": thread_id},

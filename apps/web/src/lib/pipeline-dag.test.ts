@@ -148,7 +148,7 @@ describe("buildRunGraph", () => {
     expect(reviews?.errors[0]?.errorMessage).toBe("sidecar request timed out");
   });
 
-  it("keeps review and lets play tasks when a completed run found no new games", () => {
+  it("omits review and lets play tasks when a completed run found no new games", () => {
     const graph = buildRunGraph(
       { ...RUN, status: "completed", discovered_count: 0, completed_at: "2026-09-08T12:00:03Z" },
       [],
@@ -156,13 +156,7 @@ describe("buildRunGraph", () => {
     expect(graph.catalogTask.status).toBe("completed");
     expect(graph.catalogTask.label).toContain("no new games");
     expect(graph.catalogTask.endedAt).toBe("2026-09-08T12:00:03Z");
-    expect(graph.games).toHaveLength(1);
-    expect(graph.games[0]?.slug).toBe("");
-    expect(graph.games[0]?.tasks.map((task) => [task.kind, task.status])).toEqual([
-      ["reviews", "completed"],
-      ["letsplay", "completed"],
-      ["similar", "completed"],
-    ]);
+    expect(graph.games).toEqual([]);
   });
 });
 

@@ -57,6 +57,18 @@ class ListedGame(BaseModel):
     position: int = Field(ge=0)
 
 
+class GameListed(BaseModel):
+    """One discovered game for CatalogWorker. Partition key is the slug."""
+
+    model_config = _STRICT
+
+    run_id: UUID
+    process_date: date
+    source: RunSource
+    page: int | None = None
+    game: ListedGame
+
+
 class GamesPageListed(BaseModel):
     """One listing page: Catalog loads all cards in a single task/trace."""
 

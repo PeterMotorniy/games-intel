@@ -613,15 +613,21 @@ class _FlakyReviewsPort(InProcessMetacriticAdapter):
     def __init__(self, *, fail_times: int, batch: ReviewBatch) -> None:
         super().__init__(critic_reviews={SLUG: batch}, user_reviews={SLUG: batch})
         self._fail_times = fail_times
-        self.attempts = 0
+        self.critic_attempts = 0
+        self.user_attempts = 0
+
+    @property
+    def attempts(self) -> int:
+        return max(self.critic_attempts, self.user_attempts)
 
     async def get_critic_reviews(self, inp: GetReviewsInput) -> ReviewBatch:
-        self.attempts += 1
-        if self.attempts <= self._fail_times:
+        self.critic_attempts += 1
+        if self.critic_attempts <= self._fail_times:
             raise MetacriticAdapterError("timeout", "transient")
         return await super().get_critic_reviews(inp)
 
     async def get_user_reviews(self, inp: GetReviewsInput) -> ReviewBatch:
-        if self.attempts <= self._fail_times:
+        self.user_attempts += 1
+        if self.user_attempts <= self._fail_times:
             raise MetacriticAdapterError("timeout", "transient")
         return await super().get_user_reviews(inp)

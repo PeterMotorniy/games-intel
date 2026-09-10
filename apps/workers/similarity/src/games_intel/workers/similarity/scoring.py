@@ -48,7 +48,7 @@ def jaccard(left: Sequence[str], right: Sequence[str]) -> float | None:
 
 def release_similarity(left: date | None, right: date | None, *, tau_days: int) -> float | None:
     if left is None or right is None:
-        return 0.0
+        return None
     if tau_days <= 0:
         return 0.0
     delta = abs((left - right).days)

@@ -10,6 +10,11 @@ channels:
     messages:
       GameLetsPlayAnalyzed:
         $ref: '#/components/messages/GameLetsPlayAnalyzed'
+  game_listed:
+    address: game.listed
+    messages:
+      GameListed:
+        $ref: '#/components/messages/GameListed'
   game_reviews_summarized:
     address: game.reviews.summarized
     messages:
@@ -67,6 +72,11 @@ components:
       name: GameLetsPlayAnalyzed
       payload:
         $ref: ./schemas/CloudEventGameLetsPlayAnalyzed.json
+    GameListed:
+      contentType: application/json
+      name: GameListed
+      payload:
+        $ref: ./schemas/CloudEventGameListed.json
     GameReviewsSummarized:
       contentType: application/json
       name: GameReviewsSummarized
@@ -115,6 +125,10 @@ operations:
     action: receive
     channel:
       $ref: '#/channels/game_letsplay_analyzed'
+  receive_game_listed:
+    action: receive
+    channel:
+      $ref: '#/channels/game_listed'
   receive_game_reviews_summarized:
     action: receive
     channel:
@@ -155,6 +169,10 @@ operations:
     action: send
     channel:
       $ref: '#/channels/game_letsplay_analyzed'
+  send_game_listed:
+    action: send
+    channel:
+      $ref: '#/channels/game_listed'
   send_game_reviews_summarized:
     action: send
     channel:

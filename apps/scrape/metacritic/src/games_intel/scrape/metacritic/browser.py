@@ -3,9 +3,13 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
-from games_intel.adapters.metacritic.urls import is_allowed_fetch_url
+from games_intel.adapters.metacritic.parser import (
+    listing_container_selector,
+    split_css_selectors,
+)
+from games_intel.adapters.metacritic.urls import is_allowed_fetch_url, listing_source_for_url
 from games_intel.scrape.metacritic.fetch import FetchResult
 from games_intel.settings import Settings
 from games_intel.settings.config import MetacriticAdapterSettings
@@ -15,6 +19,7 @@ if TYPE_CHECKING:
 
 REVIEWS_CARD_WAIT_MS = 6_000
 CRITIC_REVIEWS_CARD_WAIT_MS = 12_000
+LISTING_CARD_WAIT_MS = 8_000
 ONETRUST_ACCEPT_SELECTOR = "#onetrust-accept-btn-handler"
 
 logger = logging.getLogger("games_intel.scrape.metacritic")
@@ -143,6 +148,12 @@ async def _wait_for_page_markers(page: Page, meta: MetacriticAdapterSettings, ur
     if is_reviews_url(url):
         await _wait_for_reviews_page(page, meta, timeout_ms)
         return
+    source = listing_source_for_url(
+        url, browse_path=meta.browse_path, new_releases_path=meta.new_releases_path
+    )
+    if source is not None:
+        await _wait_for_listing_page(page, meta, source, timeout_ms)
+        return
     selector = combined_marker_selector(meta)
     if not selector:
         return
@@ -150,6 +161,48 @@ async def _wait_for_page_markers(page: Page, meta: MetacriticAdapterSettings, ur
         await page.wait_for_selector(selector, timeout=timeout_ms, state="attached")
     except PlaywrightTimeout:
         logger.warning("page markers not attached before timeout selector=%s", selector)
+
+
+async def _wait_for_listing_page(
+    page: Page,
+    meta: MetacriticAdapterSettings,
+    source: Literal["new_releases", "browse"],
+    timeout_ms: int,
+) -> None:
+    from playwright.async_api import TimeoutError as PlaywrightTimeout
+
+    container = listing_container_selector(meta, source)
+    if not container.strip():
+        return
+    try:
+        await page.wait_for_selector(container, timeout=timeout_ms, state="attached")
+    except PlaywrightTimeout:
+        logger.warning("listing container not attached before timeout selector=%s", container)
+        return
+    card = meta.selectors.listing.game_card
+    parts = split_css_selectors(container)
+    primary = parts[0] if parts else container
+    try:
+        await _wait_for_listing_cards(page, primary, card, LISTING_CARD_WAIT_MS)
+        return
+    except PlaywrightTimeout:
+        logger.info("primary listing cards not attached selector=%s", primary)
+    for part in parts[1:]:
+        try:
+            await _wait_for_listing_cards(page, part, card, 2_000)
+            return
+        except PlaywrightTimeout:
+            continue
+    logger.info("listing cards not attached; treating page as empty listing")
+
+
+async def _wait_for_listing_cards(page: Page, container: str, card: str, timeout_ms: int) -> None:
+    """Cards may be nested in the container, or the container nodes may themselves be cards."""
+    root = page.locator(container).first
+    nested = root.locator(card) if card.strip() else root
+    link = root.locator("a[href*='/game/']")
+    title = root.locator("[data-testid='product-title'], .c-finderProductCard_title")
+    await nested.or_(link).or_(title).first.wait_for(timeout=timeout_ms, state="attached")
 
 
 async def _wait_for_reviews_page(
@@ -169,7 +222,9 @@ async def _wait_for_reviews_page(
     if not item_selector:
         return
     wait_ms = (
-        CRITIC_REVIEWS_CARD_WAIT_MS if "/critic-reviews" in page.url.casefold() else REVIEWS_CARD_WAIT_MS
+        CRITIC_REVIEWS_CARD_WAIT_MS
+        if "/critic-reviews" in page.url.casefold()
+        else REVIEWS_CARD_WAIT_MS
     )
     try:
         await page.wait_for_selector(item_selector, timeout=wait_ms, state="attached")
@@ -199,10 +254,20 @@ def reviews_item_selector(meta: MetacriticAdapterSettings) -> str:
     return ", ".join(part.strip() for part in parts if part.strip())
 
 
+def listing_wait_selector(meta: MetacriticAdapterSettings, url: str) -> str:
+    source = listing_source_for_url(
+        url, browse_path=meta.browse_path, new_releases_path=meta.new_releases_path
+    )
+    if source is not None:
+        return listing_container_selector(meta, source)
+    return combined_marker_selector(meta)
+
+
 def combined_marker_selector(meta: MetacriticAdapterSettings) -> str:
     raw = ",".join(
         (
             meta.markers.listing_container,
+            meta.markers.browse_listing_container,
             meta.markers.card_container,
             meta.markers.reviews_container,
         )

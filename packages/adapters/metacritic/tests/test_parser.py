@@ -323,6 +323,91 @@ def test_odyssey_browse_listing() -> None:
     assert [item.slug for item in full.items] == ["backseat", "witches"]
 
 
+_MIXED_HOME_AND_BROWSE = """
+<html><body>
+  <div data-testid="new-game-release-carousel">
+    <div data-testid="product-card">
+      <a href="/game/valheim/"><h3 class="c-productCard_title">Valheim</h3></a>
+    </div>
+  </div>
+  <div class="c-finderSitePage">
+    <h1>All New Games by Release Date</h1>
+    <button data-testid="dropdown-sort">Newest Releases</button>
+    <div data-testid="filter-results">
+      <div class="c-finderProductCard">
+        <a href="/game/alembic/"><h3 class="c-finderProductCard_title">Alembic</h3></a>
+      </div>
+      <div class="c-finderProductCard">
+        <a href="/game/touhou-koumakyou/">
+          <h3 class="c-finderProductCard_title">Touhou Koumakyou</h3>
+        </a>
+      </div>
+    </div>
+  </div>
+</body></html>
+"""
+
+
+def test_browse_ignores_homepage_carousel() -> None:
+    listing = parse_listing(
+        _MIXED_HOME_AND_BROWSE,
+        _settings().adapters.metacritic,
+        source="browse",
+        page=1,
+        limit=48,
+    )
+    assert [item.slug for item in listing.items] == ["alembic", "touhou-koumakyou"]
+
+
+def test_new_releases_uses_carousel_not_browse_results() -> None:
+    listing = parse_listing(
+        _MIXED_HOME_AND_BROWSE,
+        _settings().adapters.metacritic,
+        source="new_releases",
+        limit=20,
+    )
+    assert [item.slug for item in listing.items] == ["valheim"]
+
+
+def test_empty_browse_container_does_not_fall_back_to_carousel() -> None:
+    html = """
+    <html><body>
+      <h1>All New Games by Release Date</h1>
+      <div data-testid="new-game-release-carousel">
+        <div data-testid="product-card">
+          <a href="/game/valheim/"><h3 class="c-productCard_title">Valheim</h3></a>
+        </div>
+      </div>
+      <div data-testid="filter-results"></div>
+    </body></html>
+    """
+    listing = parse_listing(html, _settings().adapters.metacritic, source="browse", page=2)
+    assert listing.items == []
+
+
+def test_browse_cards_use_filter_results_testid() -> None:
+    html = """
+    <html><body>
+      <h1>All New Games by Release Date</h1>
+      <div data-testid="filter-results">
+        <a href="/game/alembic/">
+          <h3 data-testid="product-title">Alembic</h3>
+        </a>
+      </div>
+      <div data-testid="filter-results">
+        <a href="/game/touhou-koumakyou/">
+          <span data-testid="product-title">Touhou Koumakyou</span>
+        </a>
+      </div>
+    </body></html>
+    """
+    listing = parse_listing(
+        html, _settings().adapters.metacritic, source="browse", page=1, limit=48
+    )
+    assert [item.slug for item in listing.items] == ["alembic", "touhou-koumakyou"]
+    assert listing.items[0].title == "Alembic"
+
+
 def test_odyssey_card_json_ld_and_platforms() -> None:
     html = """
     <html><body>
@@ -418,6 +503,36 @@ def test_odyssey_span_developer_and_hero_userscore() -> None:
     assert by_code["pc"].metascore == 90
     assert by_code["pc"].userscore == 8.2
     assert by_code["xsx"].userscore is None
+
+
+def test_hero_metascore_fills_selected_platform_when_card_missing() -> None:
+    html = """
+    <html><body>
+      <div data-testid="product-hero">
+        <h1 data-testid="hero-title">Valheim</h1>
+        <div data-testid="platform-selector"><span title="PC"></span></div>
+        <div data-testid="product-score">
+          <div data-testid="global-score-header">Metascore</div>
+          <div data-testid="global-score-value-wrapper" aria-label="Metascore 90 out of 100">
+            <span data-testid="global-score-value">90</span>
+          </div>
+        </div>
+        <div data-testid="product-score">
+          <div data-testid="global-score-header">User score</div>
+          <div data-testid="global-score-value-wrapper" aria-label="User score 8.2 out of 10">
+            <span data-testid="global-score-value">8.2</span>
+          </div>
+        </div>
+      </div>
+      <a data-testid="product-score-card" href="/game/valheim/critic-reviews/?platform=pc">
+        <span title="PC"></span>
+      </a>
+    </body></html>
+    """
+    details = parse_game(html, _settings().adapters.metacritic, "valheim")
+    by_code = {row.platform_code: row for row in details.platforms}
+    assert by_code["pc"].metascore == 90
+    assert by_code["pc"].userscore == 8.2
 
 
 def test_odyssey_user_score_tbd_stays_empty() -> None:

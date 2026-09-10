@@ -31,7 +31,11 @@ from games_intel.api.services import (
     MonitorQueryService,
     RunCommandService,
 )
-from games_intel.db.engine import create_engine, create_session_factory
+from games_intel.db.engine import (
+    assert_embedding_dimension,
+    create_engine,
+    create_session_factory,
+)
 from games_intel.kafka.types import MessageProducer
 from games_intel.settings import Settings, default_instance_id, load_settings
 
@@ -91,6 +95,8 @@ def create_app(
         relay_task: asyncio.Task[None] | None = None
         producer = outbox_producer
         owned_producer = False
+        if runtime_engine is not None:
+            await assert_embedding_dimension(runtime_engine, loaded.embeddings.vector_dim)
         if enable_outbox_relay and runtime_sessions is not None:
             relay_task, producer, owned_producer = await _start_outbox_relay(
                 loaded, runtime_sessions, producer, stop
@@ -135,7 +141,7 @@ def create_app(
     app.add_middleware(
         CORSMiddleware,
         allow_origins=loaded.api.cors_origins,
-        allow_credentials=True,
+        allow_credentials=False,
         allow_methods=["GET", "POST", "OPTIONS"],
         allow_headers=["*"],
     )
@@ -201,7 +207,9 @@ async def _start_outbox_relay(
             exc_info=True,
         )
         return None, runtime if owned else producer, owned
-    relay = OutboxRelay(session_factory, runtime, worker_type=_API_PRODUCER)
+    relay = OutboxRelay(
+        session_factory, runtime, worker_type=_API_PRODUCER, instance_id=default_instance_id()
+    )
 
     async def _loop() -> None:
         await relay.run_loop(stop, asyncio.sleep)

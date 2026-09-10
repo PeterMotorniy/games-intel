@@ -18,6 +18,8 @@ const FULL: GameCard = {
   video_url: "https://www.youtube.com/watch?v=E3Huy2cdih0",
   genres: ["Action", "RPG"],
   release_date: "2022-02-25",
+  metascore: 96,
+  userscore: 7.8,
   platforms: [{ platform_code: "ps5", metascore: 96, userscore: 7.8 }],
   critic: { likes: ["combat"], dislikes: ["performance"], summary: "Great combat." },
   user: { likes: ["exploration"], dislikes: ["difficulty"], summary: "Harsh but fair." },

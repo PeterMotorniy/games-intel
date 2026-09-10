@@ -74,7 +74,12 @@ describe("ListPage", () => {
   });
 
   it("shows error with retry", async () => {
-    mockFetch(() => jsonResponse({ title: "Service Unavailable", status: 503, detail: "down" }, 503));
+    mockFetch((url) => {
+      if (url.pathname.endsWith("/platforms")) {
+        return jsonResponse(PLATFORMS);
+      }
+      return jsonResponse({ title: "Service Unavailable", status: 503, detail: "down" }, 503);
+    });
     renderWithApp(<ListPage />);
     expect(await screen.findByRole("alert")).toHaveTextContent("Could not load the catalog");
     expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();

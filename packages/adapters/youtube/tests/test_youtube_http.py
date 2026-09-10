@@ -3,7 +3,11 @@ from __future__ import annotations
 from pydantic import HttpUrl
 
 from games_intel.adapters.youtube.audio import FakeAudioDownloader
-from games_intel.adapters.youtube.captions import CaptionsText, FakeCaptionsFetcher
+from games_intel.adapters.youtube.captions import (
+    CaptionsFetcher,
+    CaptionsText,
+    FakeCaptionsFetcher,
+)
 from games_intel.adapters.youtube.client import YouTubeAdapter
 from games_intel.adapters.youtube.errors import map_ytdlp_error
 from games_intel.adapters.youtube.exceptions import YoutubeAdapterError
@@ -41,7 +45,7 @@ def _hit(
 def _adapter(
     *,
     search: FakeVideoSearch | None = None,
-    captions: FakeCaptionsFetcher | None = None,
+    captions: CaptionsFetcher | None = None,
     audio: FakeAudioDownloader | None = None,
 ) -> YouTubeAdapter:
     return YouTubeAdapter(

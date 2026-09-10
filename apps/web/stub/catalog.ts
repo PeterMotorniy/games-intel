@@ -16,6 +16,8 @@ const ELDEN: GameCard = {
   video_url: "https://www.youtube.com/watch?v=E3Huy2cdih0",
   genres: ["Action", "RPG"],
   release_date: "2022-02-25",
+  metascore: 96,
+  userscore: 7.8,
   platforms: [
     { platform_code: "ps5", metascore: 96, userscore: 7.8 },
     { platform_code: "pc", metascore: 94, userscore: 7.2 },
@@ -55,6 +57,8 @@ const SEKIRO: GameCard = {
   video_url: "https://www.youtube.com/watch?v=rXMX4YJ7Lks",
   genres: ["Action", "Adventure"],
   release_date: "2019-03-22",
+  metascore: 90,
+  userscore: 8.4,
   platforms: [
     { platform_code: "ps5", metascore: 90, userscore: 8.4 },
     { platform_code: "pc", metascore: 88, userscore: 8.1 },
@@ -91,6 +95,8 @@ const SILKSONG: GameCard = {
   video_url: null,
   genres: ["Action", "Platformer"],
   release_date: "2025-09-04",
+  metascore: 91,
+  userscore: 8.6,
   platforms: [
     { platform_code: "ns2", metascore: 91, userscore: 8.6 },
     { platform_code: "pc", metascore: 90, userscore: 8.4 },
@@ -127,6 +133,8 @@ const EXPEDITION: GameCard = {
   video_url: "https://www.youtube.com/watch?v=expedition-trailer",
   genres: ["RPG"],
   release_date: "2025-04-24",
+  metascore: 92,
+  userscore: 8.8,
   platforms: [
     { platform_code: "ps5", metascore: 92, userscore: 8.8 },
     { platform_code: "xbox-series-x", metascore: 91, userscore: 8.7 },
@@ -164,6 +172,8 @@ const ANIMAL: GameCard = {
   video_url: "https://www.youtube.com/watch?v=animal-well-trailer",
   genres: ["Adventure", "Puzzle"],
   release_date: "2024-05-09",
+  metascore: 91,
+  userscore: 8.2,
   platforms: [
     { platform_code: "pc", metascore: 91, userscore: 8.2 },
     { platform_code: "ns2", metascore: 90, userscore: 8.0 },

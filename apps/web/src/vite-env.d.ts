@@ -3,6 +3,7 @@
 interface ImportMetaEnv {
   readonly VITE_API_BASE_URL: string;
   readonly VITE_USE_STUB?: string;
+  readonly VITE_API_COMMAND_TOKEN?: string;
 }
 
 interface ImportMeta {
