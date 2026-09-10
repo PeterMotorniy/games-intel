@@ -4,6 +4,18 @@ Hourly Metacritic game catalog: scrape new releases, persist cards, summarize cr
 
 Architecture, event flow, data model, and reliability: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
+<img width="2532" height="1356" alt="image" src="https://github.com/user-attachments/assets/7d673123-90dc-4f36-8880-f3968b05d268" />
+<img width="2531" height="1267" alt="image" src="https://github.com/user-attachments/assets/0e53997e-0682-41b3-ad4a-ae357d4728e7" />
+<img width="2534" height="1324" alt="image" src="https://github.com/user-attachments/assets/1a7912fb-5bab-4c8d-8464-c89fcf74b82f" />
+<img width="2522" height="954" alt="image" src="https://github.com/user-attachments/assets/0f19044d-e118-430e-8b40-e1bbcd4914d9" />
+<img width="2532" height="1341" alt="image" src="https://github.com/user-attachments/assets/cc1d1f3f-0daa-463f-a6df-c79b2908e80b" />
+<img width="2536" height="1142" alt="image" src="https://github.com/user-attachments/assets/27ca7eff-1979-4fac-8892-1756c241cbaa" />
+
+
+
+
+
+
 ## What it does
 
 Once an hour (or on **Run now** in the UI) the service:
