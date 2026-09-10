@@ -23,6 +23,7 @@ env/
 .env
 config.yaml
 config.local.yaml
+llm-transcripts.jsonl
 
 # Scratch / one-off scripts
 tmp_*.py

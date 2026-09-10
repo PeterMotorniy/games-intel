@@ -2,8 +2,7 @@
 
 Hourly Metacritic game catalog: scrape new releases, persist cards, summarize critic and user reviews, find similar titles already in the database, attach a YouTube let's-play conclusion, and expose a web UI plus a live pipeline monitor.
 
-Architecture, event flow, data model, and reliability: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).  
-LLM chat log for this project: [llm-transcripts.jsonl](llm-transcripts.jsonl).
+Architecture, event flow, data model, and reliability: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## What it does
 
@@ -189,7 +188,6 @@ contracts/                Generated JSON Schema and AsyncAPI
 infra/compose/            Dockerfiles, Compose, nginx
 tests/fixtures/           Golden Metacritic HTML
 .github/workflows/ci.yml  Lint, types, tests, schema drift, Compose config
-llm-transcripts.jsonl     Agent chat log (raw JSONL)
 ```
 
 Generated artifacts (`contracts/schemas/`, `contracts/asyncapi.yaml`, `apps/web/openapi.json`) are produced from Pydantic / FastAPI. Do not edit them by hand.
