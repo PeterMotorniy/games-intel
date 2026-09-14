@@ -1,6 +1,6 @@
 # Games Intel
 
-Hourly Metacritic game catalog: scrape new releases, persist cards, summarize critic and user reviews, find similar titles already in the database, attach a YouTube let's-play conclusion, and expose a web UI plus a live pipeline monitor.
+Games catalog-analyzer: scrape new releases, persist cards, summarize critic and user reviews, find similar titles already in the database, attach a YouTube let's-play conclusion, and expose a web UI plus a live pipeline monitor.
 
 Architecture, event flow, data model, and reliability: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
